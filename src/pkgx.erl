@@ -9,6 +9,11 @@
 main(Targets) ->
     ok = application:load(erlydtl),
     ok = application:load(pkgx),
+    %% TODO defend/nice error for missing relx.config
+    {ok, RelxTerms} = file:consult("./relx.config"),
+    {default_release, RelName, RelVer} = lists:keyfind(default_release, 1, RelxTerms),
+    RelDir = lists:flatten(io_lib:format("_rel/~s", [RelName])),
+    io:format("Release name: '~s', version: '~s'\n", [RelName, RelVer]),
     VarsFile = "pkgx.config",
     case filelib:is_regular(VarsFile) of
         false ->
@@ -16,7 +21,7 @@ main(Targets) ->
         true ->
             {ok, PkgVars} = file:consult(VarsFile),
             {package_name, PkgName} = proplists:lookup(package_name, PkgVars),
-            ReleasesFile = "_rel/releases/RELEASES",
+            ReleasesFile = RelDir ++ "/releases/RELEASES",
             case filelib:is_regular(ReleasesFile) of
                 false ->
                     cli_error("No RELEASE file found for " ++ PkgName ++ ". Run './relx release' first.");
@@ -25,7 +30,7 @@ main(Targets) ->
                     [Release|_] = lists:sort(ReleasesList0),
                     {release, AppName, Vsn, ErtsVsn, _Deps, _Permanent} = Release,
                     io:format(user, "Using release: ~s ~s~n", [AppName, Vsn]),
-                    Vars = [{app, AppName}, {version, Vsn}, {erts_version, ErtsVsn}, {basedir, "_rel"}, {relx, relx_vars()} | PkgVars],
+                    Vars = [{app, AppName}, {version, Vsn}, {erts_version, ErtsVsn}, {basedir, RelDir}, {relx, relx_vars()} | PkgVars],
                     [ok = run_target(AppName, Vsn, Vars, T) || T <- Targets],
                     ok
             end
