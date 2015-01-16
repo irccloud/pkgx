@@ -27,7 +27,7 @@ run(_AppName, _Vsn, Vars, Target) ->
     FileMap =
         [
          {"debian/changelog", deb_debian_changelog_dtl},
-         {"debian/compat", <<"9">>},
+         {"debian/compat", <<"7">>},
          {"debian/control", deb_debian_control_dtl},
          {"debian/copyright", deb_debian_copyright_dtl},
          {"debian/postinst", deb_debian_postinst_dtl},
