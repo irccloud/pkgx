@@ -4,14 +4,30 @@
 
 -module(pkgx_target_deb).
 
--export([run/3]).
+-export([run/4]).
 
-run(_AppName, _Vsn, PkgVars) ->
+run(_AppName, _Vsn, Vars, Target) ->
+    Basedir = proplists:get_value(basedir, Vars),
+    {ok, DirList} = file:list_dir(Basedir),
+
+    InstallList = [ X || X <- DirList, X /= "debian" ],
+    {InstallFiles, InstallDirs} = lists:splitwith(
+        fun(A) -> 
+            filelib:is_file(Basedir ++ "/" ++ A)
+        end, 
+        InstallList
+    ),
+
+    PkgVars = [
+        {install_files, InstallFiles},
+        {install_dirs, InstallDirs}
+        | Vars ],
+
     PkgName = proplists:get_value(package_name, PkgVars),
     FileMap =
         [
          {"debian/changelog", deb_debian_changelog_dtl},
-         {"debian/compat", <<"7">>},
+         {"debian/compat", <<"9">>},
          {"debian/control", deb_debian_control_dtl},
          {"debian/copyright", deb_debian_copyright_dtl},
          {"debian/postinst", deb_debian_postinst_dtl},
@@ -21,24 +37,28 @@ run(_AppName, _Vsn, PkgVars) ->
          {"debian/" ++ PkgName ++ ".install", deb_debian_install_dtl},
          {PkgName ++ ".config", package_config_dtl}
         ],
-    Basedir = proplists:get_value(basedir, PkgVars),
     lists:map(fun ({F, V}) ->
                       TargetFile = filename:join(Basedir, F),
                       filelib:ensure_dir(TargetFile),
                       process_file_entry(TargetFile, V, PkgVars)
               end, FileMap),
-    Output = os:cmd("cd \"" ++ Basedir ++ "\" && debuild --no-tgz-check -i -us -uc -b"),
-    io:format(user, "~s~n", [unicode:characters_to_binary(Output)]),
+    Output = os:cmd("cd \"" ++ Basedir ++ "\" && debuild --no-tgz-check --no-lintian -i -us -uc -b"),
+    io:format(user, "~s~n", [ unicode:characters_to_binary(Output) ]),
+
+    movefiles(filelib:wildcard("lib/*.deb"), Target),
+    movefiles(filelib:wildcard("lib/*.build"), Target),
+    movefiles(filelib:wildcard("lib/*.changes"), Target),
+    ok.
+
+movefiles([FilePath|Files], To) ->
+    FileName = lists:last(filename:split(FilePath)),
+    file:rename(FilePath, To ++ FileName),
+    movefiles(Files, To);
+movefiles([], _To) ->
     ok.
 
 process_file_entry(File, Module, Vars) when is_atom(Module) ->
     {ok, Output} = Module:render(Vars),
     process_file_entry(File, iolist_to_binary(Output), Vars);
-    
 process_file_entry(File, Output, _Vars) when is_binary(Output) ->
-    io:format(user, "Created ~s~n", [File]),
     ok = file:write_file(File, Output).
-    
-
-
-

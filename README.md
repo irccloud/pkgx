@@ -4,6 +4,8 @@ pkgx - Easy packaging of Erlang releases
 This program can be used to make OS packages for an Erlang application
 bundled as an OTP release.
 
+Requires `devscripts` to be installed on the debian build machine.
+
 Getting started
 ---------------
 

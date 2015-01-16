@@ -1,7 +1,6 @@
-bin/ /usr/lib/{{ package_name }}
-{% if relx.include_erts|default:true %}
-erts-{{ erts_version }} /usr/lib/{{ package_name }}
-{% endif %}
-lib/ /usr/lib/{{ package_name }}
-releases/ /usr/lib/{{ package_name }}
-{{ package_name }}.config /etc/{{ package_name }}
+{% for install in install_files %}
+{{ install }} /opt/{{ release_name }}/lib/{{ orig_package_name }}-{{ dep_version }}
+{% endfor %}
+{% for install in install_dirs %}
+{{ install }}/ /opt/{{ release_name}}/lib/{{ orig_package_name }}-{{ dep_version }}
+{% endfor %}
