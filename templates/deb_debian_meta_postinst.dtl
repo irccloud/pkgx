@@ -1,0 +1,5 @@
+#!/bin/bash -e
+cd "{{ install_prefix }}"
+if [ ! -f RELEASES ]; then
+    cp {{ version }}/RELEASES RELEASES
+fi

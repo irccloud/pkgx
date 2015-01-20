@@ -1,6 +1,3 @@
-{% for install in install_files %}
-{{ install }} /opt/{{ release_name }}/lib/{{ orig_package_name }}-{{ dep_version }}
-{% endfor %}
-{% for install in install_dirs %}
-{{ install }}/ /opt/{{ release_name}}/lib/{{ orig_package_name }}-{{ dep_version }}
+{% for from, to in install %}
+{{ from }} {{ to }}
 {% endfor %}

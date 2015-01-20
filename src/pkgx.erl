@@ -1,18 +1,8 @@
-%% @author Arjan Scherpenisse <arjan@miraclethings.nl>
-%% @copyright 2014 Arjan Scherpenisse
-%% @doc Main
-
 -module(pkgx).
-
 -export([main/1]).
 
 main(Targets) ->
-    case length(Targets) of
-        0 ->
-            io:format(user, "usage: pkgx <deb|rpm>~n", []);
-        _ ->
-            makepackages(Targets)
-    end.
+    makepackages(Targets).
 
 makepackages(_Targets) ->
     ok = application:load(erlydtl),
@@ -26,25 +16,33 @@ makepackages(_Targets) ->
 
     io:format(user, "Using release: ~s ~s~n", [AppName, ReleaseVsn]),
 
-    make_dep_packages(AppName, Deps, "/home/vagrant/packages/", ErtsVsn).
+    InstallPrefix = "/opt/" ++ AppName ++ "/lib",
+    MetaInstallPrefix = "/opt/" ++ AppName ++ "/releases",
+    OutputPath = "/home/vagrant/packages/",
 
-make_dep_packages(AppName, [Dep|Deps], Target, ErtsVsn) ->
-    io:format(user, "Package: ~p, Output: ~p", [Dep, Target]),
+    make_dep_packages(AppName, Deps, InstallPrefix, OutputPath),
+
+    ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
+    make_dep_packages(AppName, ErtsDep, "/opt/" ++ AppName, OutputPath),
+    make_meta_package(AppName, ReleaseVsn, Deps ++ ErtsDep, MetaInstallPrefix, OutputPath).
+
+make_dep_packages(AppName, [Dep|Deps], InstallPrefix, OutputPath) ->
+    io:format(user, "Package: ~p, Output: ~p~n", [Dep, OutputPath]),
 
     {DepName, DepVersion, DepPath} = Dep,
 
     DepNameList = atom_to_list(DepName),
     CompatDepName = re:replace(DepNameList, "_", "-", [global, {return, list}]),
+    PackageName = AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion,
 
     Vars = [
-        %{replaces, GrandparentVersion},
+        {install_prefix, InstallPrefix}, 
+        {install_dir_name, DepNameList ++ "-" ++ DepVersion}, 
         {release_name, AppName}, 
         {app, DepName}, 
-        {orig_package_name, DepNameList}, 
-        {package_name, AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion}, 
+        {package_name, PackageName}, 
         {version, "1"}, 
         {dep_version, DepVersion}, 
-        {erts_version, ErtsVsn}, 
         {package_author_name, "IRCCloud"}, 
         {package_author_email, "hello@irccloud.com"}, 
         {package_shortdesc, "A package"}, 
@@ -53,51 +51,59 @@ make_dep_packages(AppName, [Dep|Deps], Target, ErtsVsn) ->
         {basedir, DepPath}
         ],
 
-    pkgx_target_deb:run(DepName, DepVersion, Vars, Target),
-    make_dep_packages(AppName, Deps, Target, ErtsVsn);
+    pkgx_target_deb:run(DepName, DepVersion, Vars, OutputPath),
+    make_dep_packages(AppName, Deps, InstallPrefix, OutputPath);
 
-make_dep_packages(_AppName, [], _Target, _ErtsVsn) ->
+make_dep_packages(_AppName, [], _InstallPrefix, _OutputPath) ->
     ok.
 
+compile_dep_list(AppName, [Dep|Deps], PackageNames) ->
+    {DepName, DepVersion, _} = Dep,
+    DepNameList = atom_to_list(DepName),
+    CompatDepName = re:replace(DepNameList, "_", "-", [global, {return, list}]),
+    PackageName = AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion,
+    compile_dep_list(AppName, Deps, [PackageName|PackageNames]);
 
-makemetapackage() ->
-    ok = application:load(erlydtl),
-    ok = application:load(pkgx),
+compile_dep_list(_AppName, [], PackageNames) ->
+    PackageNames.
 
-    {ok, RelxTerms} = file:consult("./relx.config"),
-    {default_release, RelName, _RelVer} = lists:keyfind(default_release, 1, RelxTerms),
 
-    RelDir = lists:flatten(io_lib:format("_rel/~s", [RelName])),
-    VarsFile = "pkgx.config",
+make_meta_package(AppName, Version, Deps, InstallPrefix, OutputPath) ->
+    io:format(user, "Package: ~p, Output: ~p~n", [AppName, OutputPath]),
 
-    case filelib:is_regular(VarsFile) of
-        false ->
-            io:format(user, "File not found: ~s", [VarsFile]);
+    {ok, _} = file:copy(
+        "releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
+        "releases/" ++ Version ++ "/start.boot"),
 
-        true ->
-            {ok, PkgVars} = file:consult(VarsFile),
-            {package_name, _PkgName} = proplists:lookup(package_name, PkgVars),
-            ReleasesFile = RelDir ++ "/releases/RELEASES",
+    file:copy("releases/RELEASES", "releases/" ++ Version ++ "/RELEASES"),
 
-            {ok, [ReleasesList0]} = file:consult(ReleasesFile),
-            [Release|_] = lists:sort(ReleasesList0),
-            {release, AppName, Vsn, ErtsVsn, _Deps, _Permanent} = Release,
+    DepList = compile_dep_list(AppName, Deps, []),
+    DepString = string:join(DepList, ", "),
+    io:format(user, "Deps: ~p", [DepString]),
 
-            io:format(user, "Using release: ~s ~s~n", [AppName, Vsn]),
+    Vars = [
+        {install_prefix, InstallPrefix}, 
+        {install_dir_name, Version}, 
+        {release_name, AppName}, 
+        {app, AppName}, 
+        {package_name, AppName}, 
+        {version, Version}, 
+        {dep_version, Version},
+        {package_predepends, DepString},
+        {package_author_name, "IRCCloud"}, 
+        {package_author_email, "hello@irccloud.com"}, 
+        {package_shortdesc, "A package"}, 
+        {package_install_user, "vagrant"}, 
+        {package_desc, "A longer package"}, 
+        {basedir, "releases/" ++ Version},
+        {extra_templates, [
+            {"debian/postinst", deb_debian_meta_postinst_dtl},
+            {AppName, bin_command_dtl, 8#755}
+        ]},
+        {extra_files, [
+            {AppName, InstallPrefix ++ "/../bin"},
+            {"../../bin/start_clean.boot", InstallPrefix ++ "/../bin"}
+        ]}
+    ],
 
-            Vars = [
-                {user, AppName},
-                {app, AppName}, 
-                {version, Vsn}, 
-                {erts_version, ErtsVsn}, 
-                {basedir, RelDir}, 
-                {relx, RelxTerms} 
-                | PkgVars],
-
-            build_metapackage(Vars),
-
-            ok
-    end.
-
-build_metapackage(_Vars) -> 
-    ok.
+    pkgx_target_deb:run(AppName, Version, Vars, OutputPath).
