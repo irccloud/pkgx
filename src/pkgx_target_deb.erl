@@ -1,12 +1,21 @@
-%% @author Arjan Scherpenisse <arjan@miraclethings.nl>
-%% @copyright 2014 Arjan Scherpenisse
-%% @doc Debian package generation for relx
-
 -module(pkgx_target_deb).
 
--export([run/4]).
+-export([run/2]).
 
-run(_AppName, _Vsn, Vars, Target) ->
+run(Vars, Target) ->
+    PackageName = proplists:get_value(package_name, Vars),
+    Version = proplists:get_value(version, Vars),
+
+    DebFiles = filelib:wildcard(PackageName ++ "_" ++ Version ++ "-*.{deb,changes,build}", Target),
+    case length(DebFiles) == 3 of
+        true ->
+            io:format(user, "Skipping ~p, version ~p is already packaged~n", [PackageName, Version]);
+        false ->
+            io:format(user, "Building ~p, version ~p. Output: ~p~n", [PackageName, Version, Target]),
+            make_package(Vars, Target)
+    end.
+
+make_package(Vars, Target) ->
     Basedir = proplists:get_value(basedir, Vars),
     {ok, DirList} = file:list_dir(Basedir),
 
@@ -34,13 +43,10 @@ run(_AppName, _Vsn, Vars, Target) ->
     Templates =
         [
          {"debian/changelog", deb_debian_changelog_dtl},
-         {"debian/compat", <<"7">>},
          {"debian/control", deb_debian_control_dtl},
-         {"debian/copyright", deb_debian_copyright_dtl},
-         {"debian/postrm", deb_debian_postrm_dtl},
          {"debian/rules", deb_debian_rules_dtl},
-         {"debian/" ++ PkgName ++ ".install", deb_debian_install_dtl},
-         {PkgName ++ ".config", package_config_dtl}
+         {"debian/compat", <<"7">>},
+         {"debian/" ++ PkgName ++ ".install", deb_debian_install_dtl}
         ],
 
     ExtraTemplates = proplists:get_value(extra_templates, PkgVars, []),
@@ -61,10 +67,8 @@ run(_AppName, _Vsn, Vars, Target) ->
     Output = os:cmd("cd \"" ++ Basedir ++ "\" && debuild --no-tgz-check --no-lintian -i -us -uc -b"),
     io:format(user, "~s~n", [ unicode:characters_to_binary(Output) ]),
 
-    Parent = filename:dirname(Basedir),
-    movefiles(filelib:wildcard(Parent ++ "/*.deb"), Target),
-    movefiles(filelib:wildcard(Parent ++ "/*.build"), Target),
-    movefiles(filelib:wildcard(Parent ++ "/*.changes"), Target),
+    Parent = filename:absname(filename:dirname(Basedir)),
+    movefiles(filelib:wildcard(Parent ++ "/*.{deb,build,changes}"), Target),
 
     ok.
 

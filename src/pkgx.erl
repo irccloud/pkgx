@@ -27,8 +27,6 @@ makepackages(_Targets) ->
     make_meta_package(AppName, ReleaseVsn, Deps ++ ErtsDep, MetaInstallPrefix, OutputPath).
 
 make_dep_packages(AppName, [Dep|Deps], InstallPrefix, OutputPath) ->
-    io:format(user, "Package: ~p, Output: ~p~n", [Dep, OutputPath]),
-
     {DepName, DepVersion, DepPath} = Dep,
 
     DepNameList = atom_to_list(DepName),
@@ -51,7 +49,7 @@ make_dep_packages(AppName, [Dep|Deps], InstallPrefix, OutputPath) ->
         {basedir, DepPath}
         ],
 
-    pkgx_target_deb:run(DepName, DepVersion, Vars, OutputPath),
+    pkgx_target_deb:run(Vars, OutputPath),
     make_dep_packages(AppName, Deps, InstallPrefix, OutputPath);
 
 make_dep_packages(_AppName, [], _InstallPrefix, _OutputPath) ->
@@ -69,8 +67,6 @@ compile_dep_list(_AppName, [], PackageNames) ->
 
 
 make_meta_package(AppName, Version, Deps, InstallPrefix, OutputPath) ->
-    io:format(user, "Package: ~p, Output: ~p~n", [AppName, OutputPath]),
-
     {ok, _} = file:copy(
         "releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
         "releases/" ++ Version ++ "/start.boot"),
@@ -79,7 +75,6 @@ make_meta_package(AppName, Version, Deps, InstallPrefix, OutputPath) ->
 
     DepList = compile_dep_list(AppName, Deps, []),
     DepString = string:join(DepList, ", "),
-    io:format(user, "Deps: ~p", [DepString]),
 
     Vars = [
         {install_prefix, InstallPrefix}, 
@@ -106,4 +101,4 @@ make_meta_package(AppName, Version, Deps, InstallPrefix, OutputPath) ->
         ]}
     ],
 
-    pkgx_target_deb:run(AppName, Version, Vars, OutputPath).
+    pkgx_target_deb:run(Vars, OutputPath).
