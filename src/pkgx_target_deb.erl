@@ -64,17 +64,20 @@ make_package(Vars, Target) ->
               end,
               TemplateMap),
 
-    Output = os:cmd("cd \"" ++ Basedir ++ "\" && debuild --no-tgz-check --no-lintian -i -us -uc -b"),
-    io:format(user, "~s~n", [ unicode:characters_to_binary(Output) ]),
-
-    Parent = filename:absname(filename:dirname(Basedir)),
-    movefiles(filelib:wildcard(Parent ++ "/*.{deb,build,changes}"), Target),
-
-    ok.
+    CommandResult = command("debuild --no-tgz-check --no-lintian -i -us -uc -b", Basedir),
+    case CommandResult of
+        {0, _} ->
+            Parent = filename:absname(filename:dirname(Basedir)),
+            movefiles(filelib:wildcard(Parent ++ "/*.{deb,build,changes}"), Target),
+            ok;
+        {ExitCode, Error} ->
+            io:format(standard_error, "Failed to build package:~n~s", [Error]),
+            halt(ExitCode)
+    end.
 
 movefiles([FilePath|Files], To) ->
     FileName = lists:last(filename:split(FilePath)),
-    file:rename(FilePath, To ++ FileName),
+    ec_file:move(FilePath, To ++ FileName),
     movefiles(Files, To);
 movefiles([], _To) ->
     ok.
@@ -84,3 +87,38 @@ process_file_entry(File, Module, Vars) when is_atom(Module) ->
     process_file_entry(File, iolist_to_binary(Output), Vars);
 process_file_entry(File, Output, _Vars) when is_binary(Output) ->
     ok = file:write_file(File, Output).
+
+command(Cmd, Dir) ->
+    command(Cmd, Dir, []).
+command(Cmd, Dir, Env) ->
+    CD = if Dir =:= "" -> [];
+        true -> [{cd, Dir}]
+     end,
+    SetEnv = if Env =:= [] -> []; 
+        true -> [{env, Env}]
+         end,
+    Opt = CD ++ SetEnv ++ [stream, exit_status, use_stdio,
+               stderr_to_stdout, in, eof],
+    P = open_port({spawn, Cmd}, Opt),
+    get_data(P, []).
+
+get_data(P, D) ->
+    receive
+    {P, {data, D1}} ->
+        get_data(P, [D1|D]);
+    {P, eof} ->
+        port_close(P),    
+        receive
+        {P, {exit_status, N}} ->
+            {N, normalize(lists:flatten(lists:reverse(D)))}
+        end
+    end.
+
+normalize([$\r, $\n | Cs]) ->
+    [$\n | normalize(Cs)];
+normalize([$\r | Cs]) ->
+    [$\n | normalize(Cs)];
+normalize([C | Cs]) ->
+    [C | normalize(Cs)];
+normalize([]) ->
+    [].

@@ -16,22 +16,69 @@ makepackages(_Targets) ->
 
     io:format(user, "Using release: ~s ~s~n", [AppName, ReleaseVsn]),
 
+    Releases = build_release_history(AppName, ReleaseVsn),
+    {ParentReleaseVsn, ParentDeps, _GrandparentDeps} = get_versions_to_replace(Releases),
+
     InstallPrefix = "/opt/" ++ AppName ++ "/lib",
     MetaInstallPrefix = "/opt/" ++ AppName ++ "/releases",
     OutputPath = "/home/vagrant/packages/",
 
-    make_dep_packages(AppName, Deps, InstallPrefix, OutputPath),
+    make_dep_packages(AppName, Deps, ParentDeps, InstallPrefix, OutputPath),
 
     ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
-    make_dep_packages(AppName, ErtsDep, "/opt/" ++ AppName, OutputPath),
-    make_meta_package(AppName, ReleaseVsn, Deps ++ ErtsDep, MetaInstallPrefix, OutputPath).
+    make_dep_packages(AppName, ErtsDep, ParentDeps, "/opt/" ++ AppName, OutputPath),
 
-make_dep_packages(AppName, [Dep|Deps], InstallPrefix, OutputPath) ->
-    {DepName, DepVersion, DepPath} = Dep,
+    make_meta_package(AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, MetaInstallPrefix, OutputPath).
 
-    DepNameList = atom_to_list(DepName),
+
+get_versions_to_replace(Releases) when length(Releases) > 2 ->
+    {ParentVsn,_,ParentErtsVsn,ParentDeps} = lists:nth(2, Releases),
+    {_,_,GrandparentErtsVsn,GrandparentDeps} = lists:nth(3, Releases),
+    Depends = ParentDeps ++ [ParentErtsVsn],
+    Replaces = GrandparentDeps ++ [GrandparentErtsVsn],
+    {ParentVsn, Depends, Replaces};
+get_versions_to_replace(Releases) when length(Releases) =:= 2 ->
+    {_,ParentVsn,ParentErtsVsn,ParentDeps} = lists:nth(2, Releases),
+    Depends = ParentDeps ++ [ParentErtsVsn],
+    {ParentVsn, Depends, []};
+get_versions_to_replace(_Releases) ->
+    {undefined, [], []}.
+    
+
+build_release_history(AppName, RelVersion) ->
+    build_release_history(AppName, RelVersion, []).
+
+build_release_history(_AppName, undefined, Releases) ->
+    lists:reverse(Releases);
+build_release_history(AppName, RelVersion, Releases) ->
+    PreviousVersion = case file:consult("./releases/" ++ RelVersion ++ "/relup") of
+        {ok,[{_,[{Previously,_,_}],_}]} -> 
+            Previously;
+        {error, _} ->
+            undefined
+    end,
+
+    {ok, [{release, _, ErtsVersion, Deps}]} = file:consult("./releases/" ++ RelVersion ++ "/" ++ AppName ++ ".rel"),
+    build_release_history(AppName, PreviousVersion, [{RelVersion, PreviousVersion, ErtsVersion, Deps}|Releases]).
+
+
+dep_to_packagename(AppName, DepNameList, DepVersion) ->
     CompatDepName = re:replace(DepNameList, "_", "-", [global, {return, list}]),
-    PackageName = AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion,
+    AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion.
+
+
+make_dep_packages(AppName, [Dep|Deps], ParentDeps, InstallPrefix, OutputPath) ->
+    {DepName, DepVersion, DepPath} = Dep,
+    DepNameList = atom_to_list(DepName),
+    PackageName = dep_to_packagename(AppName, DepNameList, DepVersion),
+
+    ParentVersion = proplists:get_value(DepName, ParentDeps, undefined),
+    ExtraTemplates = case DepVersion /= ParentVersion andalso ParentVersion /= undefined of
+        true ->
+            [{"debian/preinst", deb_debian_preinst_dtl}];
+        false ->
+            []
+    end,
 
     Vars = [
         {install_prefix, InstallPrefix}, 
@@ -46,34 +93,52 @@ make_dep_packages(AppName, [Dep|Deps], InstallPrefix, OutputPath) ->
         {package_shortdesc, "A package"}, 
         {package_install_user, "vagrant"}, 
         {package_desc, "A longer package"}, 
-        {basedir, DepPath}
-        ],
+        {basedir, DepPath},
+        {parent_package, dep_to_packagename(AppName, DepNameList, ParentVersion)},
+        {parent_version, "1"},
+        {extra_templates, ExtraTemplates}
+    ],
 
     pkgx_target_deb:run(Vars, OutputPath),
-    make_dep_packages(AppName, Deps, InstallPrefix, OutputPath);
+    make_dep_packages(AppName, Deps, ParentDeps, InstallPrefix, OutputPath);
 
-make_dep_packages(_AppName, [], _InstallPrefix, _OutputPath) ->
+make_dep_packages(_AppName, [], _ParentDeps, _InstallPrefix, _OutputPath) ->
     ok.
 
-compile_dep_list(AppName, [Dep|Deps], PackageNames) ->
-    {DepName, DepVersion, _} = Dep,
+get_package_name(AppName, {DepName, DepVersion, _}) ->
+    get_package_name(AppName, {DepName, DepVersion});
+get_package_name(AppName, {DepName, DepVersion}) ->
     DepNameList = atom_to_list(DepName),
     CompatDepName = re:replace(DepNameList, "_", "-", [global, {return, list}]),
-    PackageName = AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion,
-    compile_dep_list(AppName, Deps, [PackageName|PackageNames]);
+    AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion.
 
+compile_dep_list(AppName, [Dep|Deps], PackageNames) ->
+    PackageName = get_package_name(AppName, Dep),
+    compile_dep_list(AppName, Deps, [PackageName|PackageNames]);
 compile_dep_list(_AppName, [], PackageNames) ->
     PackageNames.
 
 
-make_meta_package(AppName, Version, Deps, InstallPrefix, OutputPath) ->
+make_meta_package(AppName, Version, OldVersion, Deps, ParentDeps, InstallPrefix, OutputPath) ->
     {ok, _} = file:copy(
         "releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
         "releases/" ++ Version ++ "/start.boot"),
 
     file:copy("releases/RELEASES", "releases/" ++ Version ++ "/RELEASES"),
 
-    DepList = compile_dep_list(AppName, Deps, []),
+    ExtraTemplates = case OldVersion /= undefined of
+        true ->
+            [
+                {"debian/postinst", deb_debian_meta_upgrade_postinst_dtl},
+                {"debian/preinst", deb_debian_preinst_dtl}
+            ];
+        false ->
+            [{"debian/postinst", deb_debian_meta_postinst_dtl}]
+    end,
+
+    DepList =   compile_dep_list(AppName, Deps, []) ++
+                compile_dep_list(AppName, ParentDeps, []) ++ 
+                ["python", "python-apt"],
     DepString = string:join(DepList, ", "),
 
     Vars = [
@@ -91,10 +156,11 @@ make_meta_package(AppName, Version, Deps, InstallPrefix, OutputPath) ->
         {package_install_user, "vagrant"}, 
         {package_desc, "A longer package"}, 
         {basedir, "releases/" ++ Version},
+        {parent_package, AppName},
+        {parent_version, OldVersion},
         {extra_templates, [
-            {"debian/postinst", deb_debian_meta_postinst_dtl},
             {AppName, bin_command_dtl, 8#755}
-        ]},
+        ] ++ ExtraTemplates},
         {extra_files, [
             {AppName, InstallPrefix ++ "/../bin"},
             {"../../bin/start_clean.boot", InstallPrefix ++ "/../bin"}
