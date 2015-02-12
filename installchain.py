@@ -1,10 +1,15 @@
 #!/usr/bin/python
+import sys
 import apt
 
 pkg_name = "relsandbox"
 
 cache = apt.cache.Cache(apt.progress.text.OpProgress())
-pkg = cache[pkg_name]
+pkg = cache.get(pkg_name, None)
+
+if not pkg:
+    print pkg_name + " is not available in the apt repositories configured on this machine"
+    sys.exit(1)
 
 install_versions = []
 
@@ -33,3 +38,4 @@ for version in install_versions:
         cache.commit()
     except Exception, arg:
         print "Package installation failed [{err}]".format(err=str(arg))
+        sys.exit(1)
