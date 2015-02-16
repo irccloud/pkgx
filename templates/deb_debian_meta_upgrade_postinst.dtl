@@ -1,2 +1,19 @@
-{% include "deb_debian_meta_postinst.dtl" %}
+#!/bin/bash -e
+cd "{{ install_prefix }}"
 
+PING=$(../bin/relsandbox ping || echo)
+if [ "$PING" == "pong" ]; then
+    echo "Node running, performing runtime upgrade"
+
+    erl -noshell -noinput -eval '
+    {ok, [L]} = file:consult("{{ version }}/RELEASES"),
+    {ok, "{{ version }}"} = release_handler:set_unpacked("{{ version }}/{{ app.rel }}", L),
+    {ok, "{{ old_version }}", _} = release_handler:check_install_release("{{ version }}"),
+    {ok, "{{ old_version }}", _} = release_handler:install_release("{{ version }}"),
+    ok = release_handler:make_permanent("{{ version }}"),
+    init:stop().'
+
+else
+    echo "Node not running, overwriting RELEASES"
+    cp {{ version }}/RELEASES RELEASES
+fi

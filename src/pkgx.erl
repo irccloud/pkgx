@@ -28,6 +28,8 @@ makepackages(_Targets) ->
     ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
     make_dep_packages(AppName, ErtsDep, ParentDeps, "/opt/" ++ AppName, OutputPath),
 
+    make_release_package(AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, MetaInstallPrefix, OutputPath),
+
     make_meta_package(AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, MetaInstallPrefix, OutputPath).
 
 
@@ -38,7 +40,7 @@ get_versions_to_replace(Releases) when length(Releases) > 2 ->
     Replaces = GrandparentDeps ++ [GrandparentErtsVsn],
     {ParentVsn, Depends, Replaces};
 get_versions_to_replace(Releases) when length(Releases) =:= 2 ->
-    {_,ParentVsn,ParentErtsVsn,ParentDeps} = lists:nth(2, Releases),
+    {ParentVsn,_,ParentErtsVsn,ParentDeps} = lists:nth(2, Releases),
     Depends = ParentDeps ++ [ParentErtsVsn],
     {ParentVsn, Depends, []};
 get_versions_to_replace(_Releases) ->
@@ -119,12 +121,53 @@ compile_dep_list(_AppName, [], PackageNames) ->
     PackageNames.
 
 
-make_meta_package(AppName, Version, OldVersion, Deps, ParentDeps, InstallPrefix, OutputPath) ->
+make_release_package(AppName, Version, OldVersion, Deps, _ParentDeps, InstallPrefix, OutputPath) ->
     {ok, _} = file:copy(
         "releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
         "releases/" ++ Version ++ "/start.boot"),
 
     file:copy("releases/RELEASES", "releases/" ++ Version ++ "/RELEASES"),
+
+    ExtraTemplates = case OldVersion /= undefined of
+        true ->
+            [
+                {"debian/preinst", deb_debian_preinst_dtl}
+            ];
+        false ->
+            []
+    end,
+
+    DepList =   compile_dep_list(AppName, Deps, []) ++ ["python", "python-apt"],
+    DepString = string:join(DepList, ", "),
+
+    Vars = [
+        {install_prefix, InstallPrefix}, 
+        {install_dir_name, Version}, 
+        {release_name, AppName}, 
+        {app, AppName}, 
+        {package_name, AppName ++ "-release-" ++ Version}, 
+        {version, "1"}, 
+        {dep_version, Version},
+        {package_predepends, DepString},
+        {package_author_name, "IRCCloud"}, 
+        {package_author_email, "hello@irccloud.com"}, 
+        {package_shortdesc, "A package"}, 
+        {package_install_user, "vagrant"}, 
+        {package_desc, "A longer package"}, 
+        {basedir, "releases/" ++ Version},
+        {parent_package, AppName ++ "-release-" ++ OldVersion},
+        {parent_version, "1"},
+        {extra_templates, [
+            {AppName, bin_command_dtl, 8#755}
+        ] ++ ExtraTemplates}
+    ],
+
+    pkgx_target_deb:run(Vars, OutputPath).
+
+
+make_meta_package(AppName, Version, OldVersion, _Deps, _ParentDeps, InstallPrefix, OutputPath) ->
+
+    io:format("Oldversion: ~p~n", [OldVersion]),
 
     ExtraTemplates = case OldVersion /= undefined of
         true ->
@@ -136,9 +179,19 @@ make_meta_package(AppName, Version, OldVersion, Deps, ParentDeps, InstallPrefix,
             [{"debian/postinst", deb_debian_meta_postinst_dtl}]
     end,
 
-    DepList =   compile_dep_list(AppName, Deps, []) ++
-                compile_dep_list(AppName, ParentDeps, []) ++ 
-                ["python", "python-apt"],
+    OldDeps = case OldVersion /= undefined of
+        true ->
+            [AppName ++ "-release-" ++ OldVersion];
+        false ->
+            []
+    end,
+
+    DepList = OldDeps ++ [
+        "python", 
+        "python-apt", 
+        AppName ++ "-release-" ++ Version
+    ],
+
     DepString = string:join(DepList, ", "),
 
     Vars = [
@@ -159,10 +212,12 @@ make_meta_package(AppName, Version, OldVersion, Deps, ParentDeps, InstallPrefix,
         {parent_package, AppName},
         {parent_version, OldVersion},
         {extra_templates, [
-            {AppName, bin_command_dtl, 8#755}
+            {AppName, bin_command_dtl, 8#755},
+            {AppName ++ "_upgrade", upgrade_command_dtl, 8#755}
         ] ++ ExtraTemplates},
-        {extra_files, [
+        {override_files, [
             {AppName, InstallPrefix ++ "/../bin"},
+            {AppName ++ "_upgrade", InstallPrefix ++ "/../bin"},
             {"../../bin/start_clean.boot", InstallPrefix ++ "/../bin"}
         ]}
     ],

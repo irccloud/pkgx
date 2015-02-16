@@ -37,7 +37,15 @@ make_package(Vars, Target) ->
     ),
 
     ExtraFiles = proplists:get_value(extra_files, Vars, []),
-    PkgVars = [ {install, Install ++ ExtraFiles} | Vars ],
+    
+    OverrideFiles = proplists:get_value(override_files, Vars, []),
+    InstallFiles = case length(OverrideFiles) > 0 of
+        true ->
+            OverrideFiles;
+        false ->
+            Install ++ ExtraFiles
+    end,
+    PkgVars = [ {install, InstallFiles} | Vars ],
 
     PkgName = proplists:get_value(package_name, PkgVars),
     Templates =
