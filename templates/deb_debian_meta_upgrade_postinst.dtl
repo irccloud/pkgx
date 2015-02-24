@@ -1,7 +1,7 @@
 #!/bin/bash -e
 cd "{{ install_prefix }}"
 
-PING=$(../bin/relsandbox ping || echo)
+PING=$(../bin/{{ app }} ping || echo)
 if [ "$PING" == "pong" ]; then
     echo "Node running, performing runtime upgrade"
 
