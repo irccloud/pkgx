@@ -2,15 +2,14 @@
 import sys
 import apt
 
-pkg_name = "relsandbox"
+pkg_name = "{{ app }}"
 
 cache = apt.cache.Cache(apt.progress.text.OpProgress())
-pkg = cache.get(pkg_name, None)
-
-if not pkg:
+if pkg_name not in cache:
     print pkg_name + " is not available in the apt repositories configured on this machine"
     sys.exit(1)
 
+pkg = cache[pkg_name]
 install_versions = []
 
 if pkg.is_installed:
