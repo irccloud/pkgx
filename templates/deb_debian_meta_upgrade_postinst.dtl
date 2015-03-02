@@ -1,23 +1,29 @@
 #!/bin/bash -e
 cd "{{ install_prefix }}"
 
-PING=$(../bin/{{ app }} ping || echo)
-if [ "$PING" == "pong" ]; then
-    echo "Node running, performing runtime upgrade"
+if [ -f RELEASES ]; then
+    PING=$(../bin/prattle ping || echo)
+    if [ "$PING" == "pong" ]; then
+        echo "Node running, performing runtime upgrade"
 
-    erl -env ERL_MAX_PORTS 1024 -setcookie {{ app }} -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
-    Target = list_to_atom("{{ app }}@127.0.0.1"),
-    {ok, Cwd} = file:get_cwd(),
-    ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
-    {ok, [{_,_,_,L}]} = file:consult("{{ version }}/{{ app }}.rel"),
-    Libs = [ {M,V,"../lib"} || {M,V} <- L],
-    {ok, "{{ version }}"} = rpc:call(Target, release_handler, set_unpacked, ["{{ version }}/{{ app }}.rel", Libs], 300000),
-    {ok, "{{ parent_version }}", _} = rpc:call(Target, release_handler, check_install_release, ["{{ version }}"], 300000),
-    {ok, "{{ parent_version }}", _} = rpc:call(Target, release_handler, install_release, ["{{ version }}"], 300000),
-    ok = rpc:call(Target, release_handler, make_permanent, ["{{ version }}"], 300000),
-    init:stop().'
+        erl -env ERL_MAX_PORTS 1024 -setcookie {{ app }} -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
+        Target = list_to_atom("{{ app }}@127.0.0.1"),
+        {ok, Cwd} = file:get_cwd(),
+        ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
+        {ok, [{_,_,_,L}]} = file:consult("{{ version }}/{{ app }}.rel"),
+        Libs = [ {M,V,"../lib"} || {M,V} <- L],
+        {ok, "{{ version }}"} = rpc:call(Target, release_handler, set_unpacked, ["{{ version }}/{{ app }}.rel", Libs], 300000),
+        {ok, "{{ parent_version }}", _} = rpc:call(Target, release_handler, check_install_release, ["{{ version }}"], 300000),
+        {ok, "{{ parent_version }}", _} = rpc:call(Target, release_handler, install_release, ["{{ version }}"], 300000),
+        ok = rpc:call(Target, release_handler, make_permanent, ["{{ version }}"], 300000),
+        init:stop().'
+
+    else
+        echo "Node not running, overwriting RELEASES"
+        cp "{{ version }}/RELEASES" "RELEASES"
+    fi
 
 else
-    echo "Node not running, overwriting RELEASES"
-    cp {{ version }}/RELEASES RELEASES
+    echo "RELEASES missing, installing from release"
+    cp "{{ version }}/RELEASES" "RELEASES"
 fi

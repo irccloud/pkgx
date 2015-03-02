@@ -1,0 +1,17 @@
+#!/bin/bash -e
+cd "{{ install_prefix }}"
+
+PING=$(../erts-{{ erts_version }}/bin/escript ../erts-{{ erts_version }}/bin/nodetool -name {{ app }}@127.0.0.1 -setcookie {{ app }} ping || echo)
+if [ "$PING" == "pong" ]; then
+    echo "Node running, performing runtime release removal"
+
+    erl -env ERL_MAX_PORTS 1024 -setcookie {{ app }} -name ctl-$$@127.0.0.1 -boot "../releases/{{ dep_version }}/start_clean" -noshell -noinput -eval '
+    Target = list_to_atom("{{ app }}@127.0.0.1"),
+    {ok, Cwd} = file:get_cwd(),
+    ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
+    ok = rpc:call(Target, release_handler, set_removed, ["{{ dep_version }}"], 300000),
+    init:stop().'
+
+else
+    echo "Node not running, release needs to be removed from RELEASES manually"
+fi

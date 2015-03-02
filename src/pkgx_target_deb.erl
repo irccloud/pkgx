@@ -17,8 +17,11 @@ run(Vars, Target) ->
 
 make_package(Vars, Target) ->
     Basedir = proplists:get_value(basedir, Vars),
-    {ok, DirList} = file:list_dir(Basedir),
 
+    % Always start with a fresh debian dir
+    ec_file:remove(Basedir ++ "/debian", [recursive]),
+
+    {ok, DirList} = file:list_dir(Basedir),
     InstallList = [ X || X <- DirList, X /= "debian" ],
     InstallPrefix = proplists:get_value(install_prefix, Vars),
     InstallDir = proplists:get_value(install_dir_name, Vars),

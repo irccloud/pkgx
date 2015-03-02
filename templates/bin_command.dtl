@@ -5,6 +5,11 @@ set -e
 SCRIPT_DIR="$(dirname "$0")"
 RELEASE_ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+if [ ! -f "$RELEASE_ROOT_DIR/releases/RELEASES" ]; then
+    echo "RELEASES file not found, unable to start"
+    exit 1
+fi
+
 read REL_NAME REL_VSN ERTS_VSN <<<$(cd "$RELEASE_ROOT_DIR" && erl -noshell -noinput -eval '
 {ok, [L]} = file:consult("releases/RELEASES"),
 [{_,N,V,E,_,_}] = lists:filter(fun({_,_,_,_,_,permanent}) -> true; (_) -> false end, L),

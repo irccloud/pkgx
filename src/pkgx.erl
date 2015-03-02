@@ -28,7 +28,7 @@ makepackages(_Targets) ->
     ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
     make_dep_packages(AppName, ErtsDep, ParentDeps, "/opt/" ++ AppName, OutputPath),
 
-    make_release_package(AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, MetaInstallPrefix, OutputPath),
+    make_release_package(AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, MetaInstallPrefix, OutputPath),
 
     make_meta_package(AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, MetaInstallPrefix, OutputPath).
 
@@ -121,7 +121,11 @@ compile_dep_list(_AppName, [], PackageNames) ->
     PackageNames.
 
 
-make_release_package(AppName, Version, OldVersion, Deps, _ParentDeps, InstallPrefix, OutputPath) ->
+make_release_package(AppName, Version, OldVersion, ErtsVsn, Deps, _ParentDeps, InstallPrefix, OutputPath) ->
+    {ok, _} = file:copy(
+        "bin/start_clean.boot",
+        "releases/" ++ Version ++ "/start_clean.boot"),
+
     {ok, _} = file:copy(
         "releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
         "releases/" ++ Version ++ "/start.boot"),
@@ -131,10 +135,13 @@ make_release_package(AppName, Version, OldVersion, Deps, _ParentDeps, InstallPre
     ExtraTemplates = case OldVersion /= undefined of
         true ->
             [
-                {"debian/preinst", deb_debian_preinst_dtl}
+                {"debian/preinst", deb_debian_preinst_dtl},
+                {"debian/prerm", deb_debian_meta_prerm_dtl}
             ];
         false ->
-            []
+            [
+                {"debian/prerm", deb_debian_meta_prerm_dtl}
+            ]
     end,
 
     DepList =   compile_dep_list(AppName, Deps, []) ++ ["python", "python-apt"],
@@ -148,7 +155,8 @@ make_release_package(AppName, Version, OldVersion, Deps, _ParentDeps, InstallPre
         {package_name, AppName ++ "-release-" ++ Version}, 
         {version, "1"}, 
         {dep_version, Version},
-        {package_predepends, DepString},
+        {erts_version, ErtsVsn},
+        {package_depends, DepString},
         {package_author_name, "IRCCloud"}, 
         {package_author_email, "hello@irccloud.com"}, 
         {package_shortdesc, "A package"}, 
@@ -212,12 +220,12 @@ make_meta_package(AppName, Version, OldVersion, _Deps, _ParentDeps, InstallPrefi
         {parent_package, AppName},
         {parent_version, OldVersion},
         {extra_templates, [
-            {AppName, bin_command_dtl, 8#755},
-            {AppName ++ "_upgrade", upgrade_command_dtl, 8#755}
+            {AppName, bin_command_dtl, 8#755}, % main app command
+            {AppName ++ "_upgrade", upgrade_command_dtl, 8#755} % upgrade command
         ] ++ ExtraTemplates},
         {override_files, [
-            {AppName, InstallPrefix ++ "/../bin"},
-            {AppName ++ "_upgrade", InstallPrefix ++ "/../bin"},
+            {AppName, InstallPrefix ++ "/../bin"}, % relocate main app command
+            {AppName ++ "_upgrade", InstallPrefix ++ "/../bin"}, % relocate upgrade command
             {"../../bin/start_clean.boot", InstallPrefix ++ "/../bin"}
         ]}
     ],
