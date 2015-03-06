@@ -1,4 +1,8 @@
 #!/bin/bash -e
+
+# Fix permissions now the app has been installed
+chown -R {{ package_install_user }} {{ app_path }}
+
 cd "{{ install_prefix }}"
 
 if [ -f RELEASES ]; then
@@ -19,11 +23,19 @@ if [ -f RELEASES ]; then
         init:stop().'
 
     else
-        echo "Node not running, overwriting RELEASES"
-        cp "{{ version }}/RELEASES" "RELEASES"
+        echo "Node not running, rewriting RELEASES"
+
+        erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
+        NewRelFile = "{{ version }}/RELEASES",
+        {ok, [NewRelease]} = file:consult(NewRelFile),
+        RelFile = "/opt/prattle/releases/RELEASES",
+        {ok, [Releases]} = file:consult(RelFile),
+        OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases ],
+        ok = file:write_file(RelFile, io_lib:format("~p.~n", [NewRelease ++ OldReleases])),
+        init:stop().'
     fi
 
 else
-    echo "RELEASES missing, installing from release"
+    echo "RELEASES missing, copying from release"
     cp "{{ version }}/RELEASES" "RELEASES"
 fi

@@ -1,11 +1,12 @@
 #!/bin/bash -e
-cd "{{ install_prefix }}"
+# Switch to the release directory with start_clean in it as erlang needs it to run, and the /bin dir is probably missing now
+cd "{{ install_prefix }}/{{ dep_version }}"
 
-PING=$(../erts-{{ erts_version }}/bin/escript ../erts-{{ erts_version }}/bin/nodetool -name {{ app }}@127.0.0.1 -setcookie {{ app }} ping || echo)
+PING=$(../../erts-{{ erts_version }}/bin/escript ../../erts-{{ erts_version }}/bin/nodetool -name {{ app }}@127.0.0.1 -setcookie {{ app }} -boot "{{ dep_version }}/start_clean" ping || echo)
 if [ "$PING" == "pong" ]; then
     echo "Node running, performing runtime release removal"
 
-    erl -env ERL_MAX_PORTS 1024 -setcookie {{ app }} -name ctl-$$@127.0.0.1 -boot "../releases/{{ dep_version }}/start_clean" -noshell -noinput -eval '
+    erl -env ERL_MAX_PORTS 1024 -setcookie {{ app }} -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
     Target = list_to_atom("{{ app }}@127.0.0.1"),
     {ok, Cwd} = file:get_cwd(),
     ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
@@ -13,5 +14,18 @@ if [ "$PING" == "pong" ]; then
     init:stop().'
 
 else
-    echo "Node not running, release needs to be removed from RELEASES manually"
+    echo "Node not running, rewriting RELEASES"
+
+    erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
+    RelFile = "/opt/prattle/releases/RELEASES",
+    {ok, [Releases]} = file:consult(RelFile),
+    Filtered = lists:filter(fun({_,_,"{{ dep_version }}",_,_,_}) -> false; (_) -> true end, Releases),
+    case length(Filtered) of
+        0 ->
+            io:format("No releases left, removing RELEASES file~n"),
+            ok = file:delete(RelFile);
+        _ -> 
+            ok = file:write_file(RelFile, io_lib:format("~p.\n\n",[Filtered]))
+    end,
+    init:stop().'
 fi
