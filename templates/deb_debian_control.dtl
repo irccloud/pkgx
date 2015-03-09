@@ -1,10 +1,7 @@
 Source: {{ package_name }}
-Section: net
-Priority: optional
 Maintainer: {{ package_author_name }} <{{ package_author_email }}>
 Build-Depends: debhelper (>= 7.0)
 Standards-Version: 3.9.2
-{% if package_url %}Homepage: {{ package_url }}{% endif %}
 {% if package_git %}Vcs-Git: {{ package_git }}{% endif %}
 
 Package: {{ package_name }}
@@ -12,4 +9,3 @@ Architecture: amd64
 Depends: bash, adduser{% if package_depends %}, {{ package_depends|safe }}{% endif %}
 {% if package_predepends %}Pre-Depends: {{ package_predepends|safe }}
 {% endif %}Description: {{ package_shortdesc }}
-  {{ package_desc }}

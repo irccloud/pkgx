@@ -84,6 +84,15 @@ make_dep_packages(AppName, [Dep|Deps], ParentDeps, InstallPrefix, OutputPath) ->
             []
     end,
 
+    AppPath = DepPath ++ "/ebin/" ++ DepNameList ++ ".app",
+    Description = case filelib:is_file(AppPath) of
+        true ->
+            {ok, [{application, _, AppProperties}]} = file:consult(AppPath),
+            proplists:get_value(description, AppProperties, DepNameList);
+        false ->
+            DepNameList
+    end,
+
     Vars = [
         {install_prefix, InstallPrefix}, 
         {install_dir_name, DepNameList ++ "-" ++ DepVersion}, 
@@ -94,9 +103,8 @@ make_dep_packages(AppName, [Dep|Deps], ParentDeps, InstallPrefix, OutputPath) ->
         {dep_version, DepVersion}, 
         {package_author_name, "IRCCloud"}, 
         {package_author_email, "hello@irccloud.com"}, 
-        {package_shortdesc, "A package"}, 
+        {package_shortdesc, Description ++ ", packaged for " ++ AppName ++ "."}, 
         {package_install_user, "irccloud:irccloud"}, 
-        {package_desc, "A longer package"}, 
         {basedir, DepPath},
         {parent_package, dep_to_packagename(AppName, DepNameList, ParentVersion)},
         {parent_version, "1"},
@@ -159,9 +167,8 @@ make_release_package(AppName, Version, OldVersion, ErtsVsn, Deps, _ParentDeps, I
         {package_depends, DepString},
         {package_author_name, "IRCCloud"}, 
         {package_author_email, "hello@irccloud.com"}, 
-        {package_shortdesc, "A package"}, 
         {package_install_user, "irccloud:irccloud"}, 
-        {package_desc, "A longer package"}, 
+        {package_shortdesc, "Release directory for " ++ AppName ++ " version " ++ Version}, 
         {basedir, "releases/" ++ Version},
         {parent_package, AppName ++ "-release-" ++ OldVersion},
         {parent_version, "1"},
@@ -212,9 +219,8 @@ make_meta_package(AppName, Version, OldVersion, _Deps, _ParentDeps, InstallLocat
         {package_predepends, DepString},
         {package_author_name, "IRCCloud"}, 
         {package_author_email, "hello@irccloud.com"}, 
-        {package_shortdesc, "A package"}, 
         {package_install_user, "irccloud:irccloud"}, 
-        {package_desc, "A longer package"}, 
+        {package_shortdesc, "Meta install package and hot/cold upgrade scripts for " ++ AppName}, 
         {basedir, "releases/" ++ Version},
         {parent_package, AppName},
         {parent_version, OldVersion},
