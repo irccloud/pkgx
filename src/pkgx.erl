@@ -22,15 +22,21 @@ makepackages(_Targets) ->
     InstallLocation = "/opt/" ++ AppName,
     OutputPath = "/home/vagrant/packages/",
 
+    BaseVars = [
+        {package_author_name, "IRCCloud"}, 
+        {package_author_email, "hello@irccloud.com"}, 
+        {package_install_user, "irccloud:irccloud"}
+    ],
+
     InstallPrefix = InstallLocation ++  "/lib",
-    make_dep_packages(AppName, Deps, ParentDeps, InstallPrefix, OutputPath),
+    make_dep_packages(BaseVars, AppName, Deps, ParentDeps, InstallPrefix, OutputPath),
 
     ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
-    make_dep_packages(AppName, ErtsDep, ParentDeps, InstallLocation, OutputPath),
+    make_dep_packages(BaseVars, AppName, ErtsDep, ParentDeps, InstallLocation, OutputPath),
 
-    make_release_package(AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath),
+    make_release_package(BaseVars, AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath),
 
-    make_meta_package(AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath).
+    make_meta_package(BaseVars, AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath).
 
 
 get_versions_to_replace(Releases) when length(Releases) > 2 ->
@@ -69,7 +75,7 @@ dep_to_packagename(AppName, DepNameList, DepVersion) ->
     AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion.
 
 
-make_dep_packages(AppName, [Dep|Deps], ParentDeps, InstallPrefix, OutputPath) ->
+make_dep_packages(BaseVars, AppName, [Dep|Deps], ParentDeps, InstallPrefix, OutputPath) ->
     {DepName, DepVersion, DepPath} = Dep,
     DepNameList = atom_to_list(DepName),
     PackageName = dep_to_packagename(AppName, DepNameList, DepVersion),
@@ -93,29 +99,24 @@ make_dep_packages(AppName, [Dep|Deps], ParentDeps, InstallPrefix, OutputPath) ->
             DepNameList
     end,
 
-    Vars = [
+    Vars = BaseVars ++ [
         {install_prefix, InstallPrefix}, 
         {install_dir_name, DepNameList ++ "-" ++ DepVersion}, 
-        {release_name, AppName}, 
         {app, DepName}, 
         {package_name, PackageName}, 
         {version, "1"}, 
         {dep_version, DepVersion}, 
-        {package_author_name, "IRCCloud"}, 
-        {package_author_email, "hello@irccloud.com"}, 
         {package_shortdesc, Description ++ ", packaged for " ++ AppName ++ "."}, 
-        {package_install_user, "irccloud:irccloud"}, 
         {basedir, DepPath},
         {parent_package, dep_to_packagename(AppName, DepNameList, ParentVersion)},
         {parent_version, "1"},
-        {extra_templates, [
-        ] ++ ExtraTemplates}
+        {extra_templates, ExtraTemplates}
     ],
 
     pkgx_target_deb:run(Vars, OutputPath),
-    make_dep_packages(AppName, Deps, ParentDeps, InstallPrefix, OutputPath);
+    make_dep_packages(BaseVars, AppName, Deps, ParentDeps, InstallPrefix, OutputPath);
 
-make_dep_packages(_AppName, [], _ParentDeps, _InstallPrefix, _OutputPath) ->
+make_dep_packages(_BaseVars, _AppName, [], _ParentDeps, _InstallPrefix, _OutputPath) ->
     ok.
 
 get_package_name(AppName, {DepName, DepVersion, _}) ->
@@ -132,7 +133,7 @@ compile_dep_list(_AppName, [], PackageNames) ->
     PackageNames.
 
 
-make_release_package(AppName, Version, OldVersion, ErtsVsn, Deps, _ParentDeps, InstallLocation, OutputPath) ->
+make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _ParentDeps, InstallLocation, OutputPath) ->
     InstallPrefix = InstallLocation ++  "/releases",
 
     {ok, _} = file:copy(
@@ -152,26 +153,22 @@ make_release_package(AppName, Version, OldVersion, ErtsVsn, Deps, _ParentDeps, I
             []
     end,
 
-    DepList =   compile_dep_list(AppName, Deps, []) ++ ["python", "python-apt"],
-    DepString = string:join(DepList, ", "),
+    DepList     = compile_dep_list(AppName, Deps, []) ++ ["python", "python-apt"],
+    DepString   = string:join(DepList, ", "),
 
-    Vars = [
+    Vars = BaseVars ++ [
+        {basedir, "releases/" ++ Version},
         {install_prefix, InstallPrefix}, 
         {install_dir_name, Version}, 
-        {release_name, AppName}, 
         {app, AppName}, 
-        {package_name, AppName ++ "-release-" ++ Version}, 
         {version, "1"}, 
+        {parent_version, "1"},
         {dep_version, Version},
         {erts_version, ErtsVsn},
-        {package_depends, DepString},
-        {package_author_name, "IRCCloud"}, 
-        {package_author_email, "hello@irccloud.com"}, 
-        {package_install_user, "irccloud:irccloud"}, 
-        {package_shortdesc, "Release directory for " ++ AppName ++ " version " ++ Version}, 
-        {basedir, "releases/" ++ Version},
+        {package_name, AppName ++ "-release-" ++ Version}, 
         {parent_package, AppName ++ "-release-" ++ OldVersion},
-        {parent_version, "1"},
+        {package_depends, DepString},
+        {package_shortdesc, "Release directory for " ++ AppName ++ " version " ++ Version}, 
         {extra_templates, [
             {"debian/prerm", deb_debian_meta_prerm_dtl},
             {AppName, bin_command_dtl, 8#755}
@@ -181,7 +178,7 @@ make_release_package(AppName, Version, OldVersion, ErtsVsn, Deps, _ParentDeps, I
     pkgx_target_deb:run(Vars, OutputPath).
 
 
-make_meta_package(AppName, Version, OldVersion, _Deps, _ParentDeps, InstallLocation, OutputPath) ->
+make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, InstallLocation, OutputPath) ->
     InstallPrefix = InstallLocation ++  "/releases",
 
     io:format("Oldversion: ~p~n", [OldVersion]),
@@ -208,23 +205,19 @@ make_meta_package(AppName, Version, OldVersion, _Deps, _ParentDeps, InstallLocat
 
     DepString = string:join(DepList, ", "),
 
-    Vars = [
+    Vars = BaseVars ++ [
         {install_prefix, InstallPrefix}, 
         {install_dir_name, Version}, 
-        {release_name, AppName}, 
+        {app_path, InstallLocation},
         {app, AppName}, 
         {package_name, AppName}, 
         {version, Version}, 
-        {dep_version, Version},
+        {dep_version, Version}, %??
         {package_predepends, DepString},
-        {package_author_name, "IRCCloud"}, 
-        {package_author_email, "hello@irccloud.com"}, 
-        {package_install_user, "irccloud:irccloud"}, 
         {package_shortdesc, "Meta install package and hot/cold upgrade scripts for " ++ AppName}, 
         {basedir, "releases/" ++ Version},
         {parent_package, AppName},
         {parent_version, OldVersion},
-        {app_path, InstallLocation},
         {extra_templates, [
             {"debian/postinst", deb_debian_meta_upgrade_postinst_dtl},
             {AppName, bin_command_dtl, 8#755}, % main app command
