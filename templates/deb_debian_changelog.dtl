@@ -2,4 +2,4 @@
 
   * Create release {{ version }}
 
- -- {{ package_author_name }} <{{ package_author_email }}>  Wed, 23 Apr 2014 21:33:15 +0200
+ -- {{ author }} <{{ email }}>  Wed, 23 Apr 2014 21:33:15 +0200

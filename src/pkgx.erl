@@ -1,42 +1,66 @@
 -module(pkgx).
 -export([main/1]).
 
-main(Targets) ->
-    makepackages(Targets).
+main(CmdLine) ->
+    OptSpecList = option_spec_list(),
 
-makepackages(_Targets) ->
+    case getopt:parse(OptSpecList, CmdLine) of
+        {ok, {Options, _NonOptArgs}} ->
+            case proplists:get_value(help, Options) of
+                true ->
+                    getopt:usage(OptSpecList, "pkgx");
+                undefined ->
+                    makepackages(Options)
+                end;
+        {error, {Reason, Data}} ->
+            io:format("Error: ~s ~p~n~n", [Reason, Data]),
+            getopt:usage(OptSpecList, "pkgx")
+    end.
+
+option_spec_list() ->
+    CurrentUser = os:getenv("USER"),
+    [
+     {help,     $?,     "help",     undefined,              "Show the program options"},
+     {author,   $a,     "author",   {string, CurrentUser},  "Package author"},
+     {email,    $e,     "email",    {string, CurrentUser ++ "@localhost"}, "Email address of the package author"},
+     {usergroup,$U,     "ug",       {string, "root:root"},  "User:Group that should own the package contents"},
+     {output,   $o,     "output",   {string, "./packages"}, "Directory where the packages will be output"},
+     {relpath,  $p,     "relpath",  {string, "./_build/$ver/rel/$relname"}, "The path to the releases dir"},
+     {relname,  $n,     "relname",  string,                 "The release name you gave relx"},
+     {buildver, $b,     "buildver", string,                 "The version to build"},
+     {upfrom,   $u,     "upfrom",   string,                 "The version to upgrade from"},
+     {confirm,  $c,     "confirm",  {boolean, true},        "Confirm build settings before proceeding"}
+    ].
+
+makepackages(Options) ->
     ok = application:load(erlydtl),
     ok = application:load(pkgx),
-    
-    ReleasesFile = "./releases/RELEASES",
 
-    {ok, [ReleasesList]} = file:consult(ReleasesFile),
+    RelPath = proplists:get_value(relpath, Options, undefined),
+    ReleasesFile = "/releases/RELEASES",
+
+    {ok, [ReleasesList]} = file:consult(RelPath ++ ReleasesFile),
     [Release|_] = lists:sort(ReleasesList),
     {release, AppName, ReleaseVsn, ErtsVsn, Deps, _State} = Release,
 
     io:format(user, "Using release: ~s ~s~n", [AppName, ReleaseVsn]),
 
-    Releases = build_release_history(AppName, ReleaseVsn),
+    Releases = build_release_history(RelPath, AppName, ReleaseVsn),
     {ParentReleaseVsn, ParentDeps, _GrandparentDeps} = get_versions_to_replace(Releases),
 
     InstallLocation = "/opt/" ++ AppName,
-    OutputPath = "/home/vagrant/packages/",
-
-    BaseVars = [
-        {package_author_name, "IRCCloud"}, 
-        {package_author_email, "hello@irccloud.com"}, 
-        {package_install_user, "irccloud:irccloud"}
-    ],
+    OutputPath = proplists:get_value(output, Options) ++ "/",
+    file:make_dir(OutputPath),
 
     InstallPrefix = InstallLocation ++  "/lib",
-    make_dep_packages(BaseVars, AppName, Deps, ParentDeps, InstallPrefix, OutputPath),
+    make_dep_packages(Options, AppName, Deps, ParentDeps, InstallPrefix, OutputPath),
 
     ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
-    make_dep_packages(BaseVars, AppName, ErtsDep, ParentDeps, InstallLocation, OutputPath),
+    make_dep_packages(Options, AppName, ErtsDep, ParentDeps, InstallLocation, OutputPath),
 
-    make_release_package(BaseVars, AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath),
+    make_release_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath),
 
-    make_meta_package(BaseVars, AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath).
+    make_meta_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath).
 
 
 get_versions_to_replace(Releases) when length(Releases) > 2 ->
@@ -53,21 +77,21 @@ get_versions_to_replace(_Releases) ->
     {undefined, [], []}.
     
 
-build_release_history(AppName, RelVersion) ->
-    build_release_history(AppName, RelVersion, []).
+build_release_history(RelPath, AppName, RelVersion) ->
+    build_release_history(RelPath, AppName, RelVersion, []).
 
-build_release_history(_AppName, undefined, Releases) ->
+build_release_history(_RelPath, _AppName, undefined, Releases) ->
     lists:reverse(Releases);
-build_release_history(AppName, RelVersion, Releases) ->
-    PreviousVersion = case file:consult("./releases/" ++ RelVersion ++ "/relup") of
+build_release_history(RelPath, AppName, RelVersion, Releases) ->
+    PreviousVersion = case file:consult(RelPath ++ "/releases/" ++ RelVersion ++ "/relup") of
         {ok,[{_,[{Previously,_,_}],_}]} -> 
             Previously;
         {error, _} ->
             undefined
     end,
 
-    {ok, [{release, _, ErtsVersion, Deps}]} = file:consult("./releases/" ++ RelVersion ++ "/" ++ AppName ++ ".rel"),
-    build_release_history(AppName, PreviousVersion, [{RelVersion, PreviousVersion, ErtsVersion, Deps}|Releases]).
+    {ok, [{release, _, ErtsVersion, Deps}]} = file:consult(RelPath ++ "/releases/" ++ RelVersion ++ "/" ++ AppName ++ ".rel"),
+    build_release_history(RelPath, AppName, PreviousVersion, [{RelVersion, PreviousVersion, ErtsVersion, Deps}|Releases]).
 
 
 dep_to_packagename(AppName, DepNameList, DepVersion) ->
@@ -99,6 +123,8 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], ParentDeps, InstallPrefix, Outp
             DepNameList
     end,
 
+    RelPath = proplists:get_value(relpath, BaseVars, undefined),
+
     Vars = BaseVars ++ [
         {install_prefix, InstallPrefix}, 
         {install_dir_name, DepNameList ++ "-" ++ DepVersion}, 
@@ -107,7 +133,7 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], ParentDeps, InstallPrefix, Outp
         {version, "1"}, 
         {dep_version, DepVersion}, 
         {package_shortdesc, Description ++ ", packaged for " ++ AppName ++ "."}, 
-        {basedir, DepPath},
+        {basedir, RelPath ++ "/" ++ DepPath},
         {parent_package, dep_to_packagename(AppName, DepNameList, ParentVersion)},
         {parent_version, "1"},
         {extra_templates, ExtraTemplates}
@@ -135,16 +161,17 @@ compile_dep_list(_AppName, [], PackageNames) ->
 
 make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _ParentDeps, InstallLocation, OutputPath) ->
     InstallPrefix = InstallLocation ++  "/releases",
+    RelPath = proplists:get_value(relpath, BaseVars, undefined),
 
     {ok, _} = file:copy(
-        "bin/start_clean.boot",
-        "releases/" ++ Version ++ "/start_clean.boot"),
+        RelPath ++ "/bin/start_clean.boot",
+        RelPath ++ "/releases/" ++ Version ++ "/start_clean.boot"),
 
     {ok, _} = file:copy(
-        "releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
-        "releases/" ++ Version ++ "/start.boot"),
+        RelPath ++ "/releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
+        RelPath ++ "/releases/" ++ Version ++ "/start.boot"),
 
-    file:copy("releases/RELEASES", "releases/" ++ Version ++ "/RELEASES"),
+    file:copy(RelPath ++ "/releases/RELEASES", RelPath ++ "/releases/" ++ Version ++ "/RELEASES"),
 
     ExtraTemplates = case OldVersion /= undefined of
         true ->
@@ -157,7 +184,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
     DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
-        {basedir, "releases/" ++ Version},
+        {basedir, RelPath ++ "/releases/" ++ Version},
         {install_prefix, InstallPrefix}, 
         {install_dir_name, Version}, 
         {app, AppName}, 
@@ -204,6 +231,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
     ],
 
     DepString = string:join(DepList, ", "),
+    RelPath = proplists:get_value(relpath, BaseVars, undefined),
 
     Vars = BaseVars ++ [
         {install_prefix, InstallPrefix}, 
@@ -215,7 +243,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         {dep_version, Version}, %??
         {package_predepends, DepString},
         {package_shortdesc, "Meta install package and hot/cold upgrade scripts for " ++ AppName}, 
-        {basedir, "releases/" ++ Version},
+        {basedir, RelPath ++ "/releases/" ++ Version},
         {parent_package, AppName},
         {parent_version, OldVersion},
         {extra_templates, [

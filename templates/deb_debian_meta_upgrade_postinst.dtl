@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 # Fix permissions now the app has been installed
-chown -R {{ package_install_user }} {{ app_path }}
+chown -R {{ usergroup }} {{ app_path }}
 
 cd "{{ install_prefix }}"
 

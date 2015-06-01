@@ -1,5 +1,5 @@
 Source: {{ package_name }}
-Maintainer: {{ package_author_name }} <{{ package_author_email }}>
+Maintainer: {{ author }} <{{ email }}>
 Build-Depends: debhelper (>= 7.0)
 Standards-Version: 3.9.2
 {% if package_git %}Vcs-Git: {{ package_git }}{% endif %}
