@@ -30,7 +30,7 @@ if [ -f RELEASES ]; then
         {ok, [NewRelease]} = file:consult(NewRelFile),
         RelFile = "/opt/prattle/releases/RELEASES",
         {ok, [Releases]} = file:consult(RelFile),
-        OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases ],
+        OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases, V /= "{{version}}"],
         ok = file:write_file(RelFile, io_lib:format("~p.~n", [NewRelease ++ OldReleases])),
         init:stop().'
     fi
