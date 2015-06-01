@@ -17,7 +17,7 @@ else
     echo "Node not running, rewriting RELEASES"
 
     erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
-    RelFile = "/opt/prattle/releases/RELEASES",
+    RelFile = "/opt/{{ app }}/releases/RELEASES",
     {ok, [Releases]} = file:consult(RelFile),
     Filtered = lists:filter(fun({_,_,"{{ dep_version }}",_,_,_}) -> false; (_) -> true end, Releases),
     case length(Filtered) of
