@@ -18,7 +18,7 @@ init:stop().')
 
 REL_DIR="$RELEASE_ROOT_DIR/releases/$REL_VSN"
 ERL_OPTS=""
-PIPE_DIR="/tmp/erl_pipes/prattle/"
+PIPE_DIR="/tmp/erl_pipes/${REL_NAME}/"
 RUNNER_LOG_DIR="${RUNNER_LOG_DIR:-$RELEASE_ROOT_DIR/log}"
 
 find_erts_dir() {

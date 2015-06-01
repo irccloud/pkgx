@@ -6,7 +6,7 @@ chown -R {{ usergroup }} {{ app_path }}
 cd "{{ install_prefix }}"
 
 if [ -f RELEASES ]; then
-    PING=$(../bin/prattle ping || echo)
+    PING=$(../bin/{{ app }} ping || echo)
     if [ "$PING" == "pong" ]; then
         echo "Node running, performing runtime upgrade"
 
@@ -28,7 +28,7 @@ if [ -f RELEASES ]; then
         erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
         NewRelFile = "{{ version }}/RELEASES",
         {ok, [NewRelease]} = file:consult(NewRelFile),
-        RelFile = "/opt/prattle/releases/RELEASES",
+        RelFile = "/opt/{{ app }}/releases/RELEASES",
         {ok, [Releases]} = file:consult(RelFile),
         OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases, V /= "{{version}}"],
         ok = file:write_file(RelFile, io_lib:format("~p.~n", [NewRelease ++ OldReleases])),
