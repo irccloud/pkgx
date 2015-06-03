@@ -1,20 +1,12 @@
 #!/bin/bash
-
 set -e
 
+REL_NAME="{{ app }}"
+REL_VSN="{{ dep_version }}"
+ERTS_VSN="{{ erts_version }}"
+
 SCRIPT_DIR="$(dirname "$0")"
-RELEASE_ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-if [ ! -f "$RELEASE_ROOT_DIR/releases/RELEASES" ]; then
-    echo "RELEASES file not found, unable to start"
-    exit 1
-fi
-
-read REL_NAME REL_VSN ERTS_VSN <<<$(cd "$RELEASE_ROOT_DIR" && erl -noshell -noinput -eval '
-{ok, [L]} = file:consult("releases/RELEASES"),
-[{_,N,V,E,_,_}] = lists:filter(fun({_,_,_,_,_,permanent}) -> true; (_) -> false end, L),
-io:format("~s ~s ~s~n", [N,V,E]),
-init:stop().')
+RELEASE_ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 REL_DIR="$RELEASE_ROOT_DIR/releases/$REL_VSN"
 ERL_OPTS=""
@@ -42,8 +34,7 @@ relx_rem_sh() {
     id="remsh$(relx_gen_id)-${NAME}"
 
     # Setup remote shell command to control node
-    exec "$BINDIR/erl" "$NAME_TYPE" "$id" -remsh "$NAME" -boot start_clean \
-         -setcookie "$COOKIE"
+    exec "$BINDIR/erl" "$NAME_TYPE" "$id" -remsh "$NAME" -boot "$REL_DIR/start_clean" -setcookie "$COOKIE"
 }
 
 # Generate a random id
@@ -53,6 +44,7 @@ relx_gen_id() {
 
 # Control a node
 relx_nodetool() {
+    cd "$REL_DIR"
     command="$1"; shift
     "$ERTS_DIR/bin/escript" "$ERTS_DIR/bin/nodetool" "$NAME_TYPE" "$NAME" \
                                  -setcookie "$COOKIE" "$command"
@@ -141,6 +133,14 @@ cd "$ROOTDIR"
 
 # Check the first argument for instructions
 case "$1" in
+    vm_info)
+        echo "$NAME $COOKIE"
+        ;;
+
+    upgrade_debian)
+        exec "python" "$REL_DIR/${REL_NAME}_upgrade"
+        ;;
+
     start|start_boot)
 
         # Make sure there is not already a node running
@@ -292,7 +292,7 @@ case "$1" in
                 fi
                 ;;
             console_clean)
-                BOOTFILE="$ROOTDIR/bin/start_clean"
+                BOOTFILE="$REL_DIR/start_clean"
                 ;;
             console_boot)
                 shift
@@ -359,7 +359,7 @@ case "$1" in
         exec "$@" -- "${1+$ARGS}"
         ;;
     *)
-        echo "Usage: $REL_NAME {start|start_boot <file>|foreground|stop|restart|reboot|ping|console|console_clean|console_boot <file>|attach|remote_console|upgrade}"
+        echo "Usage: $REL_NAME {start|start_boot <file>|foreground|stop|restart|reboot|ping|console|console_clean|console_boot <file>|attach|remote_console|upgrade|vm_info|upgrade_debian}"
         exit 1
         ;;
 esac

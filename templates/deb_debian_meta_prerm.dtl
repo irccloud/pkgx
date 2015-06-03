@@ -1,17 +1,18 @@
 #!/bin/bash -e
-# Switch to the release directory with start_clean in it as erlang needs it to run, and the /bin dir is probably missing now
+# Switch to the release directory as the /bin dir is likely missing now
 cd "{{ install_prefix }}/{{ dep_version }}"
 
-PING=$(../../erts-{{ erts_version }}/bin/escript ../../erts-{{ erts_version }}/bin/nodetool -name {{ app }}@127.0.0.1 -setcookie {{ app }} -boot "{{ dep_version }}/start_clean" ping || echo)
+PING=$(./{{ app }} ping || echo)
 if [ "$PING" == "pong" ]; then
     echo "Node running, performing runtime release removal"
+    read NODE_NAME, NODE_COOKIE <<<$(./{{ app }} vm_info || echo)
 
-    erl -env ERL_MAX_PORTS 1024 -setcookie {{ app }} -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
-    Target = list_to_atom("{{ app }}@127.0.0.1"),
+    erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
+    Target = list_to_atom(\"$NODE_NAME\"),
     {ok, Cwd} = file:get_cwd(),
     ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
-    ok = rpc:call(Target, release_handler, set_removed, ["{{ dep_version }}"], 300000),
-    init:stop().'
+    ok = rpc:call(Target, release_handler, set_removed, [\"{{ dep_version }}\"], 300000),
+    init:stop()."
 
 else
     echo "Node not running, rewriting RELEASES"
