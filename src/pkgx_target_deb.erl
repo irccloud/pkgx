@@ -26,6 +26,10 @@ make_package(Vars, Target) ->
     InstallPrefix = proplists:get_value(install_prefix, Vars),
     InstallDir = proplists:get_value(install_dir_name, Vars),
 
+    % Because these need to be scanned by the install files step
+    ExtraTemplates = proplists:get_value(extra_templates, Vars, []),
+    process_templates(ExtraTemplates, Basedir, Vars),
+
     Install = lists:map(
         fun(A) ->
             To = InstallPrefix ++ "/" ++ InstallDir,
@@ -59,21 +63,7 @@ make_package(Vars, Target) ->
          {"debian/compat", <<"7">>},
          {"debian/" ++ PkgName ++ ".install", deb_debian_install_dtl}
         ],
-
-    ExtraTemplates = proplists:get_value(extra_templates, PkgVars, []),
-    TemplateMap = Templates ++ ExtraTemplates,
-
-    lists:map(fun   ({F, V}) ->
-                        TargetFile = filename:join(Basedir, F),
-                        filelib:ensure_dir(TargetFile),
-                        process_file_entry(TargetFile, V, PkgVars);
-                    ({F, V, M}) when is_integer(M) ->
-                        TargetFile = filename:join(Basedir, F),
-                        filelib:ensure_dir(TargetFile),
-                        process_file_entry(TargetFile, V, PkgVars),
-                        file:change_mode(TargetFile, M)
-              end,
-              TemplateMap),
+    process_templates(Templates, Basedir, PkgVars),
 
     CommandResult = command("debuild --no-tgz-check --no-lintian -i -us -uc -b", Basedir),
     case CommandResult of
@@ -86,6 +76,21 @@ make_package(Vars, Target) ->
             halt(ExitCode)
     end.
 
+
+process_templates(Templates, Basedir, Vars) ->
+    lists:map(fun   ({F, V}) ->
+                        TargetFile = filename:join(Basedir, F),
+                        filelib:ensure_dir(TargetFile),
+                        process_file_entry(TargetFile, V, Vars);
+                    ({F, V, M}) when is_integer(M) ->
+                        TargetFile = filename:join(Basedir, F),
+                        filelib:ensure_dir(TargetFile),
+                        process_file_entry(TargetFile, V, Vars),
+                        file:change_mode(TargetFile, M)
+              end,
+              Templates).
+
+
 movefiles([FilePath|Files], To) ->
     FileName = lists:last(filename:split(FilePath)),
     ec_file:move(FilePath, To ++ FileName),
@@ -97,6 +102,7 @@ process_file_entry(File, Module, Vars) when is_atom(Module) ->
     {ok, Output} = Module:render(Vars),
     process_file_entry(File, iolist_to_binary(Output), Vars);
 process_file_entry(File, Output, _Vars) when is_binary(Output) ->
+    io:format("Writing ~p~n", [File]),
     ok = file:write_file(File, Output).
 
 command(Cmd, Dir) ->
