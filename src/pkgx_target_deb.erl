@@ -21,8 +21,6 @@ make_package(Vars, Target) ->
     % Always start with a fresh debian dir
     ec_file:remove(Basedir ++ "/debian", [recursive]),
 
-    {ok, DirList} = file:list_dir(Basedir),
-    InstallList = [ X || X <- DirList, X /= "debian" ],
     InstallPrefix = proplists:get_value(install_prefix, Vars),
     InstallDir = proplists:get_value(install_dir_name, Vars),
 
@@ -30,6 +28,8 @@ make_package(Vars, Target) ->
     ExtraTemplates = proplists:get_value(extra_templates, Vars, []),
     process_templates(ExtraTemplates, Basedir, Vars),
 
+    {ok, DirList} = file:list_dir(Basedir),
+    InstallList = [ X || X <- DirList, X /= "debian" ],
     Install = lists:map(
         fun(A) ->
             To = InstallPrefix ++ "/" ++ InstallDir,
@@ -102,7 +102,6 @@ process_file_entry(File, Module, Vars) when is_atom(Module) ->
     {ok, Output} = Module:render(Vars),
     process_file_entry(File, iolist_to_binary(Output), Vars);
 process_file_entry(File, Output, _Vars) when is_binary(Output) ->
-    io:format("Writing ~p~n", [File]),
     ok = file:write_file(File, Output).
 
 command(Cmd, Dir) ->
