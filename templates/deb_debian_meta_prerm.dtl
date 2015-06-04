@@ -5,7 +5,7 @@ cd "{{ install_prefix }}/{{ dep_version }}"
 PING=$(./{{ app }} ping || echo)
 if [ "$PING" == "pong" ]; then
     echo "Node running, performing runtime release removal"
-    read NODE_NAME, NODE_COOKIE <<<$(./{{ app }} vm_info || echo)
+    read NODE_NAME NODE_COOKIE <<<$(./{{ app }} vm_info)
 
     erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
     Target = list_to_atom(\"$NODE_NAME\"),

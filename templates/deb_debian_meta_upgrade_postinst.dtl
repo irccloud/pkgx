@@ -9,10 +9,10 @@ if [ -f RELEASES ]; then
     PING=$({{ version }}/{{ app }} ping || echo)
     if [ "$PING" == "pong" ]; then
         echo "Node running, performing runtime upgrade"
-        read NODE_NAME, NODE_COOKIE <<<$(./{{ app }} vm_info || echo)
+        read NODE_NAME NODE_COOKIE <<<$(./{{ version }}/{{ app }} vm_info)
 
         erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
-        Target = list_to_atom("$NODE_NAME"),
+        Target = list_to_atom(\"$NODE_NAME\"),
         {ok, Cwd} = file:get_cwd(),
         ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
         {ok, [{_,_,_,L}]} = file:consult(\"{{ version }}/{{ app }}.rel\"),
