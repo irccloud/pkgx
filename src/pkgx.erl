@@ -52,11 +52,11 @@ makepackages(Options) ->
     OutputPath = proplists:get_value(output, Options) ++ "/",
     file:make_dir(OutputPath),
 
-    InstallPrefix = InstallLocation ++  "/lib",
-    make_dep_packages(Options, AppName, Deps, ParentDeps, InstallPrefix, OutputPath),
-
     ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
-    make_dep_packages(Options, AppName, ErtsDep, ParentDeps, InstallLocation, OutputPath),
+    make_dep_packages(Options, AppName, ErtsDep, [], ParentDeps, InstallLocation, OutputPath),
+
+    InstallPrefix = InstallLocation ++  "/lib",
+    make_dep_packages(Options, AppName, Deps, ErtsDep, ParentDeps, InstallPrefix, OutputPath),
 
     make_release_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath),
 
@@ -99,7 +99,7 @@ dep_to_packagename(AppName, DepNameList, DepVersion) ->
     AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion.
 
 
-make_dep_packages(BaseVars, AppName, [Dep|Deps], ParentDeps, InstallPrefix, OutputPath) ->
+make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPrefix, OutputPath) ->
     {DepName, DepVersion, DepPath} = Dep,
     DepNameList = atom_to_list(DepName),
     PackageName = dep_to_packagename(AppName, DepNameList, DepVersion),
@@ -108,10 +108,13 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], ParentDeps, InstallPrefix, Outp
     ExtraTemplates = case DepVersion /= ParentVersion andalso ParentVersion /= undefined of
         true ->
             [
-                {"debian/preinst", deb_debian_preinst_dtl}
+                {"debian/preinst", deb_debian_preinst_dtl},
+                {"debian/postinst", deb_debian_postinst_dtl}
             ];
         false ->
-            []
+            [
+                {"debian/postinst", deb_debian_postinst_dtl}
+            ]
     end,
 
     AppPath = DepPath ++ "/ebin/" ++ DepNameList ++ ".app",
@@ -125,6 +128,9 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], ParentDeps, InstallPrefix, Outp
 
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
 
+    DepList     = compile_dep_list(AppName, SubDeps, []),
+    DepString   = string:join(DepList, ", "),
+
     Vars = BaseVars ++ [
         {install_prefix, InstallPrefix}, 
         {install_dir_name, DepNameList ++ "-" ++ DepVersion}, 
@@ -132,6 +138,7 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], ParentDeps, InstallPrefix, Outp
         {package_name, PackageName}, 
         {version, "1"}, 
         {dep_version, DepVersion}, 
+        {package_depends, DepString},
         {package_shortdesc, Description ++ ", packaged for " ++ AppName ++ "."}, 
         {basedir, RelPath ++ "/" ++ DepPath},
         {parent_package, dep_to_packagename(AppName, DepNameList, ParentVersion)},
@@ -140,9 +147,9 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], ParentDeps, InstallPrefix, Outp
     ],
 
     pkgx_target_deb:run(Vars, OutputPath),
-    make_dep_packages(BaseVars, AppName, Deps, ParentDeps, InstallPrefix, OutputPath);
+    make_dep_packages(BaseVars, AppName, Deps, SubDeps, ParentDeps, InstallPrefix, OutputPath);
 
-make_dep_packages(_BaseVars, _AppName, [], _ParentDeps, _InstallPrefix, _OutputPath) ->
+make_dep_packages(_BaseVars, _AppName, [], _SubDeps, _ParentDeps, _InstallPrefix, _OutputPath) ->
     ok.
 
 get_package_name(AppName, {DepName, DepVersion, _}) ->

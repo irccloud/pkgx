@@ -1,0 +1,5 @@
+#!/bin/bash -e
+cd "{{ install_prefix }}"
+if [ -f "priv/debian.postinst" ]; then
+    priv/debian.postinst
+fi
