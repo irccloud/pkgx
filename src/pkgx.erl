@@ -172,6 +172,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
         RelPath ++ "/releases/" ++ Version ++ "/start.boot"),
 
     file:copy(RelPath ++ "/releases/RELEASES", RelPath ++ "/releases/" ++ Version ++ "/RELEASES"),
+    file:copy(RelPath ++ "/releases/start_erl.data", RelPath ++ "/releases/" ++ Version ++ "/start_erl.data"),
 
     ExtraTemplates = case OldVersion /= undefined of
         true ->
