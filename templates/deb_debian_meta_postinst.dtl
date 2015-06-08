@@ -2,4 +2,5 @@
 cd "{{ install_prefix }}"
 if [ ! -f RELEASES ]; then
     cp {{ version }}/RELEASES RELEASES
+    chmod 777 RELEASES
 fi
