@@ -52,7 +52,17 @@ make_package(Vars, Target) ->
         false ->
             Install ++ ExtraFiles
     end,
-    PkgVars = [ {install, InstallFiles} | Vars ],
+
+    InstallFilesExtMerge = case file:read_file(Basedir ++ '/priv/debian.install') of
+        {ok, Contents} ->
+            Lines = binary:split(Contents, <<"\n">>, [global]),
+            ExternalInstallFiles = [ binary:split(L, <<"\t">>, [global]) || L <- Lines, L /= <<>> ],
+            InstallFiles ++ ExternalInstallFiles;
+        {error, _} ->
+            InstallFiles
+    end,
+
+    PkgVars = [ {install, InstallFilesExtMerge} | Vars ],
 
     PkgName = proplists:get_value(package_name, PkgVars),
     Templates =
