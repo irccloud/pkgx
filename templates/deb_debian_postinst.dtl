@@ -1,5 +1,5 @@
 #!/bin/bash -e
-cd "{{ install_prefix }}"
+cd "{{ install_prefix }}/{{ install_dir_name }}"
 if [ -f "priv/debian.postinst" ]; then
     priv/debian.postinst
 fi
