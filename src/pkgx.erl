@@ -180,7 +180,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
             []
     end,
 
-    DepList     = compile_dep_list(AppName, Deps, []) ++ ["python", "python-apt", "erts-" ++ ErtsVsn],
+    DepList     = compile_dep_list(AppName, Deps, []) ++ ["python", "python-apt"],
     DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
