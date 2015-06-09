@@ -25,7 +25,7 @@ else
     case length(Filtered) of
         0 ->
             io:format("No releases left, removing RELEASES file~n"),
-            ok = file:delete(RelFile);
+            ok = file:delete(RelFile),
             ok = file:delete(DataFile);
         _ -> 
             ok = file:write_file(RelFile, io_lib:format("~p.\n\n",[Filtered]))
