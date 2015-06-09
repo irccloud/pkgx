@@ -35,8 +35,16 @@ if [ -f RELEASES ]; then
         ok = file:write_file(RelFile, io_lib:format("~p.~n", [NewRelease ++ OldReleases])),
         init:stop().'
     fi
+fi
 
-else
+if [ ! -f "RELEASES" ]; then
     echo "RELEASES missing, copying from release"
     cp "{{ version }}/RELEASES" "RELEASES"
+    chmod 777 "RELEASES"
+fi
+
+if [ ! -f "start_erl.data" ]; then
+    echo "start_erl.data missing, copying from release"
+    cp "{{ version }}/start_erl.data" "start_erl.data"
+    chmod 777 "start_erl.data"
 fi
