@@ -138,7 +138,7 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
         {package_name, PackageName}, 
         {version, "1"}, 
         {dep_version, DepVersion}, 
-        {package_depends, DepString},
+        {package_predepends, DepString},
         {package_shortdesc, Description ++ ", packaged for " ++ AppName ++ "."}, 
         {basedir, RelPath ++ "/" ++ DepPath},
         {parent_package, dep_to_packagename(AppName, DepNameList, ParentVersion)},

@@ -1,8 +1,4 @@
 #!/bin/bash -e
-
-# Fix permissions now the app has been installed
-chown -R {{ usergroup }} {{ app_path }}
-
 cd "{{ install_prefix }}"
 
 if [ -f RELEASES ]; then
