@@ -84,6 +84,10 @@ build_release_history(_RelPath, _AppName, undefined, Releases) ->
     lists:reverse(Releases);
 build_release_history(RelPath, AppName, RelVersion, Releases) ->
     PreviousVersion = case file:consult(RelPath ++ "/releases/" ++ RelVersion ++ "/relup") of
+        {ok,[{_,[{RelVersion,_,_}],_}]} ->
+            %% if you get your relup gen in a mess, this can sometimes happen.
+            %% this will prevent an infinite loop if a relup claims to upgrade from its own version.
+            undefined;
         {ok,[{_,[{Previously,_,_}],_}]} -> 
             Previously;
         {error, _} ->
