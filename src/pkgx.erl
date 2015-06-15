@@ -53,14 +53,14 @@ makepackages(Options) ->
     file:make_dir(OutputPath),
 
     ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
-    make_dep_packages(Options, AppName, ErtsDep, [], ParentDeps, InstallLocation, OutputPath),
+    ok, _ = make_dep_packages(Options, AppName, ErtsDep, [], ParentDeps, InstallLocation, OutputPath, []),
 
     InstallPrefix = InstallLocation ++  "/lib",
-    make_dep_packages(Options, AppName, Deps, ErtsDep, ParentDeps, InstallPrefix, OutputPath),
+    ok, ExtraInstallFiles = make_dep_packages(Options, AppName, Deps, ErtsDep, ParentDeps, InstallPrefix, OutputPath, []),
 
     make_release_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath),
 
-    make_meta_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath).
+    make_meta_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath, ExtraInstallFiles).
 
 
 get_versions_to_replace(Releases) when length(Releases) > 2 ->
@@ -103,7 +103,7 @@ dep_to_packagename(AppName, DepNameList, DepVersion) ->
     AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion.
 
 
-make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPrefix, OutputPath) ->
+make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPrefix, OutputPath, InstallFiles) ->
     {DepName, DepVersion, DepPath} = Dep,
     DepNameList = atom_to_list(DepName),
     PackageName = dep_to_packagename(AppName, DepNameList, DepVersion),
@@ -131,6 +131,7 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
     end,
 
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
+    Basedir = RelPath ++ "/" ++ DepPath,
 
     DepList     = compile_dep_list(AppName, SubDeps, []),
     DepString   = string:join(DepList, ", "),
@@ -144,17 +145,36 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
         {dep_version, DepVersion}, 
         {package_predepends, DepString},
         {package_shortdesc, Description ++ ", packaged for " ++ AppName ++ "."}, 
-        {basedir, RelPath ++ "/" ++ DepPath},
+        {basedir, Basedir},
         {parent_package, dep_to_packagename(AppName, DepNameList, ParentVersion)},
         {parent_version, "1"},
         {extra_templates, ExtraTemplates}
     ],
 
-    pkgx_target_deb:run(Vars, OutputPath),
-    make_dep_packages(BaseVars, AppName, Deps, SubDeps, ParentDeps, InstallPrefix, OutputPath);
+    ExtInstallFiles = case file:read_file(Basedir ++ '/priv/debian.install') of
+        {ok, Contents} ->
+            Lines = binary:split(Contents, <<"\n">>, [global]),
+            lists:filtermap(
+                fun(Line) -> 
+                    case Line of
+                        <<>> ->
+                            false;
+                        _ ->
+                            [From, To] = binary:split(Line, <<"\t">>, [global]),
+                            {true, [ DepPath ++ "/" ++ binary_to_list(From), binary_to_list(To) ]}
+                    end
+                end,
+                Lines
+            );
+        {error, _} ->
+            []
+    end,
 
-make_dep_packages(_BaseVars, _AppName, [], _SubDeps, _ParentDeps, _InstallPrefix, _OutputPath) ->
-    ok.
+    pkgx_target_deb:run(Vars, OutputPath),
+    make_dep_packages(BaseVars, AppName, Deps, SubDeps, ParentDeps, InstallPrefix, OutputPath, ExtInstallFiles ++ InstallFiles);
+
+make_dep_packages(_BaseVars, _AppName, [], _SubDeps, _ParentDeps, _InstallPrefix, _OutputPath, InstallFiles) ->
+    ok, InstallFiles.
 
 get_package_name(AppName, {DepName, DepVersion, _}) ->
     get_package_name(AppName, {DepName, DepVersion});
@@ -218,7 +238,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
     pkgx_target_deb:run(Vars, OutputPath).
 
 
-make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, InstallLocation, OutputPath) ->
+make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, InstallLocation, OutputPath, ExtraInstallFiles) ->
     InstallPrefix = InstallLocation ++  "/releases",
 
     io:format("Oldversion: ~p~n", [OldVersion]),
@@ -255,8 +275,8 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         {version, Version}, 
         {dep_version, Version}, %??
         {package_predepends, DepString},
-        {package_shortdesc, "Meta install package and hot/cold upgrade scripts for " ++ AppName}, 
-        {basedir, RelPath ++ "/releases/" ++ Version},
+        {package_shortdesc, "Meta install package for " ++ AppName}, 
+        {basedir, RelPath},
         {parent_package, AppName},
         {parent_version, OldVersion},
         {extra_templates, [
@@ -265,7 +285,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         ] ++ ExtraTemplates},
         {override_files, [
             {AppName, InstallPrefix ++ "/../bin"} % relocate main app command
-        ]}
+        ] ++ ExtraInstallFiles}
     ],
 
     pkgx_target_deb:run(Vars, OutputPath).

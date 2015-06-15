@@ -53,16 +53,7 @@ make_package(Vars, Target) ->
             Install ++ ExtraFiles
     end,
 
-    InstallFilesExtMerge = case file:read_file(Basedir ++ '/priv/debian.install') of
-        {ok, Contents} ->
-            Lines = binary:split(Contents, <<"\n">>, [global]),
-            ExternalInstallFiles = [ binary:split(L, <<"\t">>, [global]) || L <- Lines, L /= <<>> ],
-            InstallFiles ++ ExternalInstallFiles;
-        {error, _} ->
-            InstallFiles
-    end,
-
-    PkgVars = [ {install, InstallFilesExtMerge} | Vars ],
+    PkgVars = [ {install, InstallFiles} | Vars ],
 
     PkgName = proplists:get_value(package_name, PkgVars),
     Templates =
@@ -70,7 +61,6 @@ make_package(Vars, Target) ->
          {"debian/changelog", deb_debian_changelog_dtl},
          {"debian/control", deb_debian_control_dtl},
          {"debian/rules", deb_debian_rules_dtl},
-         {"debian/compat", <<"7">>},
          {"debian/" ++ PkgName ++ ".install", deb_debian_install_dtl}
         ],
     process_templates(Templates, Basedir, PkgVars),
@@ -78,7 +68,8 @@ make_package(Vars, Target) ->
     CommandResult = command("debuild --no-tgz-check --no-lintian -i -us -uc -b", Basedir),
     case CommandResult of
         {0, _} ->
-            Parent = filename:absname(filename:dirname(Basedir)),
+            Cleaned = filename:join(filename:split(Basedir)),
+            Parent = filename:absname(filename:dirname(Cleaned)),
             movefiles(filelib:wildcard(Parent ++ "/*.{deb,build,changes}"), Target),
             ok;
         {ExitCode, Error} ->
