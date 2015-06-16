@@ -1,6 +1,22 @@
 #!/bin/bash -e
 cd "{{ install_prefix }}"
 
+if ! id -u "{{user}}" &> /dev/null; then
+    echo "Creating '{{user}}' user"
+    adduser --system "{{user}}"
+fi
+
+if [ ! -d "/var/log/{{app}}" ]; then
+    echo "Creating log directory"
+    mkdir "/var/log/{{app}}"
+    chown -R "{{user}}" "/var/log/{{app}}"
+fi
+
+if [ ! -f "../log" ]; then
+    echo "Linking log directory"
+    ln -s "/var/log/{{app}}" "../log"
+fi
+
 if [ -f RELEASES ]; then
     PING=$({{ version }}/{{ app }} ping || echo)
     if [ "$PING" == "pong" ]; then

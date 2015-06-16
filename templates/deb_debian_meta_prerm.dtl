@@ -20,13 +20,15 @@ else
     erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
     RelFile = "/opt/{{ app }}/releases/RELEASES",
     DataFile = "/opt/{{ app }}/releases/start_erl.data",
+    LogFile = "/opt/{{ app }}/log",
     {ok, [Releases]} = file:consult(RelFile),
     Filtered = lists:filter(fun({_,_,"{{ dep_version }}",_,_,_}) -> false; (_) -> true end, Releases),
     case length(Filtered) of
         0 ->
             io:format("No releases left, removing RELEASES file~n"),
             ok = file:delete(RelFile),
-            ok = file:delete(DataFile);
+            ok = file:delete(DataFile),
+            ok = file:delete(LogFile);
         _ -> 
             ok = file:write_file(RelFile, io_lib:format("~p.\n\n",[Filtered]))
     end,

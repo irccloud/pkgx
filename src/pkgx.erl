@@ -23,7 +23,7 @@ option_spec_list() ->
      {help,     $?,     "help",     undefined,              "Show the program options"},
      {author,   $a,     "author",   {string, CurrentUser},  "Package author"},
      {email,    $e,     "email",    {string, CurrentUser ++ "@localhost"}, "Email address of the package author"},
-     {usergroup,$U,     "ug",       {string, "root:root"},  "User:Group that should own the package contents"},
+     {user,     $U,     "user",     {string, "root"},       "User that will be running the app"},
      {output,   $o,     "output",   {string, "./packages"}, "Directory where the packages will be output"},
      {relpath,  $p,     "relpath",  {string, "./_build/$ver/rel/$relname"}, "The path to the releases dir"},
      {relname,  $n,     "relname",  string,                 "The release name you gave relx"},
