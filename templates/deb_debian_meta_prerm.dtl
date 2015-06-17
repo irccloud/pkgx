@@ -1,36 +1,44 @@
-#!/bin/bash -e
-# Switch to the release directory as the /bin dir is likely missing now
-cd "{{ install_prefix }}/{{ dep_version }}"
+#!/bin/bash
+set -e
 
-PING=$(./{{ app }} ping || echo)
-if [ "$PING" == "pong" ]; then
-    echo "Node running, performing runtime release removal"
-    read NODE_NAME NODE_COOKIE <<<$(./{{ app }} vm_info)
+case $1 in
+    remove)
+        # Switch to the release directory as the /bin dir is likely missing now
+        cd "{{ install_prefix }}/{{ dep_version }}"
 
-    erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
-    Target = list_to_atom(\"$NODE_NAME\"),
-    {ok, Cwd} = file:get_cwd(),
-    ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
-    ok = rpc:call(Target, release_handler, set_removed, [\"{{ dep_version }}\"], 300000),
-    init:stop()."
+        PING=$(./{{ app }} ping || echo)
+        if [ "$PING" == "pong" ]; then
+            echo "Node running, performing runtime release removal"
+            read NODE_NAME NODE_COOKIE <<<$(./{{ app }} vm_info)
 
-else
-    echo "Node not running, rewriting RELEASES"
+            erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
+            Target = list_to_atom(\"$NODE_NAME\"),
+            {ok, Cwd} = file:get_cwd(),
+            ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
+            ok = rpc:call(Target, release_handler, set_removed, [\"{{ dep_version }}\"], 300000),
+            init:stop()."
 
-    erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
-    RelFile = "/opt/{{ app }}/releases/RELEASES",
-    DataFile = "/opt/{{ app }}/releases/start_erl.data",
-    LogFile = "/opt/{{ app }}/log",
-    {ok, [Releases]} = file:consult(RelFile),
-    Filtered = lists:filter(fun({_,_,"{{ dep_version }}",_,_,_}) -> false; (_) -> true end, Releases),
-    case length(Filtered) of
-        0 ->
-            io:format("No releases left, removing RELEASES file~n"),
-            ok = file:delete(RelFile),
-            ok = file:delete(DataFile),
-            ok = file:delete(LogFile);
-        _ -> 
-            ok = file:write_file(RelFile, io_lib:format("~p.\n\n",[Filtered]))
-    end,
-    init:stop().'
-fi
+        else
+            echo "Node not running, rewriting RELEASES"
+
+            erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
+            RelFile = "/opt/{{ app }}/releases/RELEASES",
+            DataFile = "/opt/{{ app }}/releases/start_erl.data",
+            LogFile = "/opt/{{ app }}/log",
+            {ok, [Releases]} = file:consult(RelFile),
+            Filtered = lists:filter(fun({_,_,"{{ dep_version }}",_,_,_}) -> false; (_) -> true end, Releases),
+            case length(Filtered) of
+                0 ->
+                    io:format("No releases left, removing RELEASES file~n"),
+                    ok = file:delete(RelFile),
+                    ok = file:delete(DataFile),
+                    ok = file:delete(LogFile);
+                _ -> 
+                    ok = file:write_file(RelFile, io_lib:format("~p.\n\n",[Filtered]))
+            end,
+            init:stop().'
+        fi
+    ;;
+esac
+
+exit 0

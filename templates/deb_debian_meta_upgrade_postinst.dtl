@@ -1,62 +1,71 @@
-#!/bin/bash -e
-cd "{{ install_prefix }}"
+#!/bin/bash
+set -e
 
-if ! id -u "{{user}}" &> /dev/null; then
-    echo "Creating '{{user}}' user"
-    adduser --system "{{user}}"
-fi
+case $1 in
+    configure)
 
-if [ ! -d "/var/log/{{app}}" ]; then
-    echo "Creating log directory"
-    mkdir "/var/log/{{app}}"
-    chown -R "{{user}}" "/var/log/{{app}}"
-fi
+        cd "{{ install_prefix }}"
 
-if [ ! -f "../log" ]; then
-    echo "Linking log directory"
-    ln -s "/var/log/{{app}}" "../log"
-fi
+        if ! id -u "{{user}}" &> /dev/null; then
+            echo "Creating '{{user}}' user"
+            adduser --system "{{user}}"
+        fi
 
-if [ -f RELEASES ]; then
-    PING=$({{ version }}/{{ app }} ping || echo)
-    if [ "$PING" == "pong" ]; then
-        echo "Node running, performing runtime upgrade"
-        read NODE_NAME NODE_COOKIE <<<$(./{{ version }}/{{ app }} vm_info)
+        if [ ! -d "/var/log/{{app}}" ]; then
+            echo "Creating log directory"
+            mkdir "/var/log/{{app}}"
+            chown -R "{{user}}" "/var/log/{{app}}"
+        fi
 
-        erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
-        Target = list_to_atom(\"$NODE_NAME\"),
-        {ok, Cwd} = file:get_cwd(),
-        ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
-        {ok, [{_,_,_,L}]} = file:consult(\"{{ version }}/{{ app }}.rel\"),
-        Libs = [ {M,V,\"../lib\"} || {M,V} <- L],
-        {ok, \"{{ version }}\"} = rpc:call(Target, release_handler, set_unpacked, [\"{{ version }}/{{ app }}.rel\", Libs], 300000),
-        {ok, \"{{ parent_version }}\", _} = rpc:call(Target, release_handler, check_install_release, [\"{{ version }}\"], 300000),
-        {ok, \"{{ parent_version }}\", _} = rpc:call(Target, release_handler, install_release, [\"{{ version }}\"], 300000),
-        ok = rpc:call(Target, release_handler, make_permanent, [\"{{ version }}\"], 300000),
-        init:stop()."
+        if [ ! -h "../log" ]; then
+            echo "Linking log directory"
+            ln -s "/var/log/{{app}}" "../log"
+        fi
 
-    else
-        echo "Node not running, rewriting RELEASES"
+        if [ -f RELEASES ]; then
+            PING=$({{ version }}/{{ app }} ping || echo)
+            if [ "$PING" == "pong" ]; then
+                echo "Node running, performing runtime upgrade"
+                read NODE_NAME NODE_COOKIE <<<$(./{{ version }}/{{ app }} vm_info)
 
-        erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
-        NewRelFile = "{{ version }}/RELEASES",
-        {ok, [NewRelease]} = file:consult(NewRelFile),
-        RelFile = "/opt/{{ app }}/releases/RELEASES",
-        {ok, [Releases]} = file:consult(RelFile),
-        OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases, V /= "{{version}}"],
-        ok = file:write_file(RelFile, io_lib:format("~p.~n", [NewRelease ++ OldReleases])),
-        init:stop().'
-    fi
-fi
+                erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
+                Target = list_to_atom(\"$NODE_NAME\"),
+                {ok, Cwd} = file:get_cwd(),
+                ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
+                {ok, [{_,_,_,L}]} = file:consult(\"{{ version }}/{{ app }}.rel\"),
+                Libs = [ {M,V,\"../lib\"} || {M,V} <- L],
+                {ok, \"{{ version }}\"} = rpc:call(Target, release_handler, set_unpacked, [\"{{ version }}/{{ app }}.rel\", Libs], 300000),
+                {ok, \"{{ parent_version }}\", _} = rpc:call(Target, release_handler, check_install_release, [\"{{ version }}\"], 300000),
+                {ok, \"{{ parent_version }}\", _} = rpc:call(Target, release_handler, install_release, [\"{{ version }}\"], 300000),
+                ok = rpc:call(Target, release_handler, make_permanent, [\"{{ version }}\"], 300000),
+                init:stop()."
 
-if [ ! -f "RELEASES" ]; then
-    echo "RELEASES missing, copying from release"
-    cp "{{ version }}/RELEASES" "RELEASES"
-    chmod 777 "RELEASES"
-fi
+            else
+                echo "Node not running, rewriting RELEASES"
 
-if [ ! -f "start_erl.data" ]; then
-    echo "start_erl.data missing, copying from release"
-    cp "{{ version }}/start_erl.data" "start_erl.data"
-    chmod 777 "start_erl.data"
-fi
+                erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
+                NewRelFile = "{{ version }}/RELEASES",
+                {ok, [NewRelease]} = file:consult(NewRelFile),
+                RelFile = "/opt/{{ app }}/releases/RELEASES",
+                {ok, [Releases]} = file:consult(RelFile),
+                OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases, V /= "{{version}}"],
+                ok = file:write_file(RelFile, io_lib:format("~p.~n", [NewRelease ++ OldReleases])),
+                init:stop().'
+            fi
+        fi
+
+        if [ ! -f "RELEASES" ]; then
+            echo "RELEASES missing, copying from release"
+            cp "{{ version }}/RELEASES" "RELEASES"
+            chmod 777 "RELEASES"
+        fi
+
+        if [ ! -f "start_erl.data" ]; then
+            echo "start_erl.data missing, copying from release"
+            cp "{{ version }}/start_erl.data" "start_erl.data"
+            chmod 777 "start_erl.data"
+        fi
+    ;;
+esac
+
+exit 0
