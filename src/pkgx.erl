@@ -29,7 +29,8 @@ option_spec_list() ->
      {relname,  $n,     "relname",  string,                 "The release name you gave relx"},
      {buildver, $b,     "buildver", string,                 "The version to build"},
      {upfrom,   $u,     "upfrom",   string,                 "The version to upgrade from"},
-     {confirm,  $c,     "confirm",  {boolean, true},        "Confirm build settings before proceeding"}
+     {confirm,  $c,     "confirm",  {boolean, true},        "Confirm build settings before proceeding"},
+     {suffix,   $s,     "suffix",   {string, ""},           "String to append to all package names"}
     ].
 
 makepackages(Options) ->
@@ -53,10 +54,10 @@ makepackages(Options) ->
     file:make_dir(OutputPath),
 
     ErtsDep = [{erts, ErtsVsn, "erts-" ++ ErtsVsn}],
-    ok, _ = make_dep_packages(Options, AppName, ErtsDep, [], ParentDeps, InstallLocation, OutputPath, []),
+    make_dep_packages(Options, AppName, ErtsDep, [], ParentDeps, InstallLocation, OutputPath, []),
 
     InstallPrefix = InstallLocation ++  "/lib",
-    ok, ExtraInstallFiles = make_dep_packages(Options, AppName, Deps, ErtsDep, ParentDeps, InstallPrefix, OutputPath, []),
+    ExtraInstallFiles = make_dep_packages(Options, AppName, Deps, ErtsDep, ParentDeps, InstallPrefix, OutputPath, []),
 
     make_release_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath),
 
@@ -98,18 +99,20 @@ build_release_history(RelPath, AppName, RelVersion, Releases) ->
     build_release_history(RelPath, AppName, PreviousVersion, [{RelVersion, PreviousVersion, ErtsVersion, Deps}|Releases]).
 
 
-dep_to_packagename(AppName, DepNameList, DepVersion) ->
+dep_to_packagename(AppName, Suffix, DepNameList, DepVersion) ->
     CompatDepName = re:replace(DepNameList, "_", "-", [global, {return, list}]),
-    AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion.
+    AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion ++ Suffix.
 
 
 make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPrefix, OutputPath, InstallFiles) ->
     {DepName, DepVersion, DepPath} = Dep,
     DepNameList = atom_to_list(DepName),
-    PackageName = dep_to_packagename(AppName, DepNameList, DepVersion),
 
-    ParentVersion = proplists:get_value(DepName, ParentDeps, undefined),
-    ExtraTemplates = case DepVersion /= ParentVersion andalso ParentVersion /= undefined of
+    Suffix = proplists:get_value(suffix, BaseVars),
+    PackageName = dep_to_packagename(AppName, Suffix, DepNameList, DepVersion),
+
+    ParentVersion = proplists:get_value(DepName, ParentDeps, ""),
+    ExtraTemplates = case DepVersion /= ParentVersion andalso ParentVersion /= "" of
         true ->
             [
                 {"debian/preinst", deb_debian_preinst_dtl},
@@ -133,7 +136,7 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
     Basedir = RelPath ++ "/" ++ DepPath,
 
-    DepList     = compile_dep_list(AppName, SubDeps, []),
+    DepList     = compile_dep_list(AppName, Suffix, SubDeps, []),
     DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
@@ -146,7 +149,7 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
         {package_predepends, DepString},
         {package_shortdesc, Description ++ ", packaged for " ++ AppName ++ "."}, 
         {basedir, Basedir},
-        {parent_package, dep_to_packagename(AppName, DepNameList, ParentVersion)},
+        {parent_package, dep_to_packagename(AppName, Suffix, DepNameList, ParentVersion)},
         {parent_version, "1"},
         {extra_templates, ExtraTemplates}
     ],
@@ -174,25 +177,26 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
     make_dep_packages(BaseVars, AppName, Deps, SubDeps, ParentDeps, InstallPrefix, OutputPath, ExtInstallFiles ++ InstallFiles);
 
 make_dep_packages(_BaseVars, _AppName, [], _SubDeps, _ParentDeps, _InstallPrefix, _OutputPath, InstallFiles) ->
-    ok, InstallFiles.
+    InstallFiles.
 
-get_package_name(AppName, {DepName, DepVersion, _}) ->
-    get_package_name(AppName, {DepName, DepVersion});
-get_package_name(AppName, {DepName, DepVersion}) ->
+get_package_name(AppName, {DepName, DepVersion, _}, Suffix) ->
+    get_package_name(AppName, {DepName, DepVersion}, Suffix);
+get_package_name(AppName, {DepName, DepVersion}, Suffix) ->
     DepNameList = atom_to_list(DepName),
     CompatDepName = re:replace(DepNameList, "_", "-", [global, {return, list}]),
-    AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion.
+    AppName ++ "-" ++ CompatDepName ++ "-" ++ DepVersion ++ Suffix.
 
-compile_dep_list(AppName, [Dep|Deps], PackageNames) ->
-    PackageName = get_package_name(AppName, Dep),
-    compile_dep_list(AppName, Deps, [PackageName|PackageNames]);
-compile_dep_list(_AppName, [], PackageNames) ->
+compile_dep_list(AppName, Suffix, [Dep|Deps], PackageNames) ->
+    PackageName = get_package_name(AppName, Dep, Suffix),
+    compile_dep_list(AppName, Suffix, Deps, [PackageName|PackageNames]);
+compile_dep_list(_AppName, _Suffix, [], PackageNames) ->
     PackageNames.
 
 
 make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _ParentDeps, InstallLocation, OutputPath) ->
     InstallPrefix = InstallLocation ++  "/releases",
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
+    Suffix = proplists:get_value(suffix, BaseVars),
 
     {ok, _} = file:copy(
         RelPath ++ "/bin/start_clean.boot",
@@ -212,7 +216,14 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
             []
     end,
 
-    DepList     = compile_dep_list(AppName, Deps, []) ++ ["python", "python-apt"],
+    OldPackage = case OldVersion /= undefined of
+        true ->
+            AppName ++ "-release-" ++ OldVersion ++ Suffix;
+        false ->
+            undefined
+    end,
+
+    DepList     = compile_dep_list(AppName, Suffix, Deps, []) ++ ["python", "python-apt"],
     DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
@@ -224,8 +235,8 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
         {parent_version, "1"},
         {dep_version, Version},
         {erts_version, ErtsVsn},
-        {package_name, AppName ++ "-release-" ++ Version}, 
-        {parent_package, AppName ++ "-release-" ++ OldVersion},
+        {package_name, AppName ++ "-release-" ++ Version ++ Suffix}, 
+        {parent_package, OldPackage},
         {package_depends, DepString},
         {package_shortdesc, "Release directory for " ++ AppName ++ " version " ++ Version}, 
         {extra_templates, [
@@ -240,6 +251,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
 
 make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, InstallLocation, OutputPath, ExtraInstallFiles) ->
     InstallPrefix = InstallLocation ++  "/releases",
+    Suffix = proplists:get_value(suffix, BaseVars),
 
     io:format("Oldversion: ~p~n", [OldVersion]),
 
@@ -252,7 +264,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
 
     OldDeps = case OldVersion /= undefined of
         true ->
-            [AppName ++ "-release-" ++ OldVersion];
+            [AppName ++ "-release-" ++ OldVersion ++ Suffix];
         false ->
             []
     end,
@@ -260,7 +272,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
     DepList = OldDeps ++ [
         "python", 
         "python-apt", 
-        AppName ++ "-release-" ++ Version
+        AppName ++ "-release-" ++ Version ++ Suffix
     ],
 
     DepString = string:join(DepList, ", "),
@@ -271,13 +283,13 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         {install_dir_name, Version}, 
         {app_path, InstallLocation},
         {app, AppName}, 
-        {package_name, AppName}, 
+        {package_name, AppName ++ Suffix}, 
         {version, Version}, 
         {dep_version, Version}, %??
         {package_predepends, DepString},
         {package_shortdesc, "Meta install package for " ++ AppName}, 
         {basedir, RelPath},
-        {parent_package, AppName},
+        {parent_package, AppName ++ Suffix},
         {parent_version, OldVersion},
         {extra_templates, [
             {"debian/postinst", deb_debian_meta_upgrade_postinst_dtl},
