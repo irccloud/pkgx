@@ -136,8 +136,16 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
     Basedir = RelPath ++ "/" ++ DepPath,
 
+    ExtDependencies = case file:read_file(Basedir ++ "/priv/debian.dependencies") of
+        {ok, DepContents} ->
+            DepLines = binary:split(DepContents, <<"\n">>, [global]),
+            [ binary_to_list(X) || X <- DepLines, X /= <<>> ];
+        {error, _} ->
+            []
+    end,
+
     DepList     = compile_dep_list(AppName, Suffix, SubDeps, []),
-    DepString   = string:join(DepList, ", "),
+    DepString   = string:join(DepList ++ ExtDependencies, ", "),
 
     Vars = BaseVars ++ [
         {install_prefix, InstallPrefix}, 
@@ -154,9 +162,9 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
         {extra_templates, ExtraTemplates}
     ],
 
-    ExtInstallFiles = case file:read_file(Basedir ++ '/priv/debian.install') of
-        {ok, Contents} ->
-            Lines = binary:split(Contents, <<"\n">>, [global]),
+    ExtInstallFiles = case file:read_file(Basedir ++ "/priv/debian.install") of
+        {ok, InstContents} ->
+            Lines = binary:split(InstContents, <<"\n">>, [global]),
             lists:filtermap(
                 fun(Line) -> 
                     case Line of
