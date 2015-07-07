@@ -23,32 +23,32 @@ case $1 in
         fi
 
         if [ -f RELEASES ]; then
-            PING=$({{ version }}/{{ app }} ping || echo)
+            PING=$({{ dep_version }}/{{ app }} ping || echo)
             if [ "$PING" == "pong" ]; then
                 echo "Node running, performing runtime upgrade"
-                read NODE_NAME NODE_COOKIE <<<$(./{{ version }}/{{ app }} vm_info)
+                read NODE_NAME NODE_COOKIE <<<$(./{{ dep_version }}/{{ app }} vm_info)
 
                 erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
                 Target = list_to_atom(\"$NODE_NAME\"),
-                {ok, Cwd} = file:get_cwd(),
-                ok = rpc:call(Target, file, set_cwd, [Cwd], 300000),
-                {ok, [{_,_,_,L}]} = file:consult(\"{{ version }}/{{ app }}.rel\"),
-                Libs = [ {M,V,\"../lib\"} || {M,V} <- L],
-                {ok, \"{{ version }}\"} = rpc:call(Target, release_handler, set_unpacked, [\"{{ version }}/{{ app }}.rel\", Libs], 300000),
-                {ok, \"{{ parent_version }}\", _} = rpc:call(Target, release_handler, check_install_release, [\"{{ version }}\"], 300000),
-                {ok, \"{{ parent_version }}\", _} = rpc:call(Target, release_handler, install_release, [\"{{ version }}\"], 300000),
-                ok = rpc:call(Target, release_handler, make_permanent, [\"{{ version }}\"], 300000),
+                {ok, [{_,_,_,L}]} = file:consult(\"{{ dep_version }}/{{ app }}.rel\"),
+                RelFile = filename:join(file:get_cwd(), \"{{ dep_version }}/{{ app }}.rel\"),
+                LibDir = filename:join(file:get_cwd(), \"../lib\"),
+                Libs = [ {M,V,LibDir} || {M,V} <- L],
+                {ok, \"{{ dep_version }}\"} = rpc:call(Target, release_handler, set_unpacked, [RelFile, Libs], 300000),
+                {ok, \"{{ parent_dep_version }}\", _} = rpc:call(Target, release_handler, check_install_release, [\"{{ dep_version }}\"], 300000),
+                {ok, \"{{ parent_dep_version }}\", _} = rpc:call(Target, release_handler, install_release, [\"{{ dep_version }}\"], 300000),
+                ok = rpc:call(Target, release_handler, make_permanent, [\"{{ dep_version }}\"], 300000),
                 init:stop()."
 
             else
                 echo "Node not running, rewriting RELEASES"
 
                 erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
-                NewRelFile = "{{ version }}/RELEASES",
+                NewRelFile = "{{ dep_version }}/RELEASES",
                 {ok, [NewRelease]} = file:consult(NewRelFile),
                 RelFile = "/opt/{{ app }}/releases/RELEASES",
                 {ok, [Releases]} = file:consult(RelFile),
-                OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases, V /= "{{version}}"],
+                OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases, V /= "{{dep_version}}"],
                 ok = file:write_file(RelFile, io_lib:format("~p.~n", [NewRelease ++ OldReleases])),
                 init:stop().'
             fi
@@ -56,13 +56,13 @@ case $1 in
 
         if [ ! -f "RELEASES" ]; then
             echo "RELEASES missing, copying from release"
-            cp "{{ version }}/RELEASES" "RELEASES"
+            cp "{{ dep_version }}/RELEASES" "RELEASES"
             chmod 777 "RELEASES"
         fi
 
         if [ ! -f "start_erl.data" ]; then
             echo "start_erl.data missing, copying from release"
-            cp "{{ version }}/start_erl.data" "start_erl.data"
+            cp "{{ dep_version }}/start_erl.data" "start_erl.data"
             chmod 777 "start_erl.data"
         fi
     ;;

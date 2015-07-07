@@ -248,6 +248,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
         {package_depends, DepString},
         {package_shortdesc, "Release directory for " ++ AppName ++ " version " ++ Version}, 
         {extra_templates, [
+            {"debian/postinst", deb_debian_meta_upgrade_postinst_dtl},
             {"debian/prerm", deb_debian_meta_prerm_dtl},
             {AppName, bin_command_dtl, 8#755},
             {AppName ++ "_upgrade", upgrade_command_dtl, 8#755}
@@ -300,7 +301,6 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         {parent_package, AppName ++ Suffix},
         {parent_version, OldVersion},
         {extra_templates, [
-            {"debian/postinst", deb_debian_meta_upgrade_postinst_dtl},
             {AppName, proxy_bin_command_dtl, 8#755}
         ] ++ ExtraTemplates},
         {override_files, [
