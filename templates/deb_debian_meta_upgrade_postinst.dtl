@@ -38,9 +38,9 @@ case $1 in
                 io:format(\"* set_unpacked~n\"),
                 {ok, \"{{ dep_version }}\"} = rpc:call(Target, release_handler, set_unpacked, [RelFile, Libs], 300000),
                 io:format(\"* check_install_release~n\"),
-                {ok, \"{{ parent_version }}\", _} = rpc:call(Target, release_handler, check_install_release, [\"{{ dep_version }}\"], 300000),
+                {ok, \"{{ parent_dep_version }}\", _} = rpc:call(Target, release_handler, check_install_release, [\"{{ dep_version }}\"], 300000),
                 io:format(\"* install_release~n\"),
-                {ok, \"{{ parent_version }}\", _} = rpc:call(Target, release_handler, install_release, [\"{{ dep_version }}\"], 300000),
+                {ok, \"{{ parent_dep_version }}\", _} = rpc:call(Target, release_handler, install_release, [\"{{ dep_version }}\"], 300000),
                 io:format(\"* make_permenant~n\"),
                 ok = rpc:call(Target, release_handler, make_permanent, [\"{{ dep_version }}\"], 300000),
                 init:stop()."
