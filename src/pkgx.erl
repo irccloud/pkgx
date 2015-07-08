@@ -240,7 +240,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
         {install_dir_name, Version}, 
         {app, AppName}, 
         {version, "1"}, 
-        {parent_version, "1"},
+        {parent_version, OldVersion},
         {dep_version, Version},
         {erts_version, ErtsVsn},
         {package_name, AppName ++ "-release-" ++ Version ++ Suffix}, 
