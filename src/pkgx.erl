@@ -57,11 +57,11 @@ makepackages(Options) ->
     make_dep_packages(Options, AppName, ErtsDep, [], ParentDeps, InstallLocation, OutputPath, []),
 
     InstallPrefix = InstallLocation ++  "/lib",
-    ExtraInstallFiles = make_dep_packages(Options, AppName, Deps, ErtsDep, ParentDeps, InstallPrefix, OutputPath, []),
+    ExtraInstallFiles = make_dep_packages(Options, AppName, Deps, [], ParentDeps, InstallPrefix, OutputPath, []),
 
     make_release_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, ErtsVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath),
 
-    make_meta_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, Deps ++ ErtsDep, ParentDeps, InstallLocation, OutputPath, ExtraInstallFiles).
+    make_meta_package(Options, AppName, ReleaseVsn, ParentReleaseVsn, Deps, ParentDeps, InstallLocation, OutputPath, ExtraInstallFiles).
 
 
 get_versions_to_replace(Releases) when length(Releases) > 2 ->
@@ -144,8 +144,8 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
             []
     end,
 
-    DepList     = compile_dep_list(AppName, Suffix, SubDeps, []),
-    DepString   = string:join(DepList ++ ExtDependencies, ", "),
+    DepList     = compile_dep_list(AppName, Suffix, SubDeps, []) ++ [AppName] ++ ExtDependencies,
+    DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
         {install_prefix, InstallPrefix}, 
@@ -154,7 +154,7 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
         {package_name, PackageName}, 
         {version, "1"}, 
         {dep_version, DepVersion}, 
-        {package_predepends, DepString},
+        {package_depends, DepString},
         {package_shortdesc, Description ++ ", packaged for " ++ AppName ++ "."}, 
         {basedir, Basedir},
         {parent_package, dep_to_packagename(AppName, Suffix, DepNameList, ParentVersion)},
@@ -231,7 +231,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
             undefined
     end,
 
-    DepList     = compile_dep_list(AppName, Suffix, Deps, []) ++ ["python", "python-apt"],
+    DepList     = compile_dep_list(AppName, Suffix, Deps, []) ++ [AppName, "python", "python-apt"],
     DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
@@ -296,7 +296,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         {package_name, AppName ++ Suffix}, 
         {version, Version}, 
         {dep_version, Version}, %??
-        {package_predepends, DepString},
+        {package_depends, DepString},
         {package_shortdesc, "Meta install package for " ++ AppName}, 
         {basedir, RelPath},
         {parent_package, AppName ++ Suffix},
