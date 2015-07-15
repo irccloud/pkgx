@@ -62,6 +62,7 @@ case $1 in
                         % This version is the same as the current version, nop
                         io:format(\"Release {{ dep_version }} is already installed.~n\");
 
+                    %% This does not actually happen for check_install_release, the case above does. The docs lie.
                     {error, {already_installed, _}} ->
                         % This version is the same as the current version, nop
                         io:format(\"Release {{ dep_version }} is already installed.~n\");

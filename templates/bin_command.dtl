@@ -137,7 +137,7 @@ case "$1" in
         echo "$NAME $COOKIE"
         ;;
 
-    upgrade_debian)
+    deb_upgrade)
         exec "python" "$REL_DIR/${REL_NAME}_upgrade"
         ;;
 
