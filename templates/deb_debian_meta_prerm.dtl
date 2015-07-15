@@ -5,6 +5,7 @@ case $1 in
     remove)
         # Switch to the release directory as the /bin dir is likely missing now
         cd "{{ install_prefix }}/{{ dep_version }}"
+        export ERL_CRASH_DUMP="/dev/null"
 
         PING=$(./{{ app }} ping || echo)
         if [ "$PING" == "pong" ]; then

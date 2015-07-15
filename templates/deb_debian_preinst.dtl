@@ -6,5 +6,5 @@ tagfile = apt_pkg.TagFile(open('/var/lib/dpkg/status'))
 for section in tagfile:
     if section['Package'] == '{{ parent_package }}':
         if section['Version'] != '{{ parent_version }}-1':
-            print "\033[91mERROR: Package is installed, however the version is more than one revision ahead. Please use the '{{ app }}_upgrade' tool to upgrade this package.\033[0m"
+            print "\033[91mERROR: Package is installed, however the version is more than one revision ahead. Please use the '{{ app }} upgrade_debian' tool to upgrade this package.\033[0m"
             sys.exit(1)

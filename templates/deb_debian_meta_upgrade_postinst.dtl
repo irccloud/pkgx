@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
+export ERL_CRASH_DUMP="/dev/null"
 
 case $1 in
     configure)
-
         cd "{{ install_prefix }}"
 
         if ! id -u "{{user}}" &> /dev/null; then
@@ -30,32 +30,86 @@ case $1 in
 
                 erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
                 Target = list_to_atom(\"$NODE_NAME\"),
+                RelHandler = fun(F, A) -> rpc:call(Target, release_handler, F, A, 30000) end,
                 {ok, [{_,_,_,L}]} = file:consult(\"{{ dep_version }}/{{ app }}.rel\"),
                 {ok, CWD} = file:get_cwd(),
                 RelFile = filename:join(CWD, \"{{ dep_version }}/{{ app }}.rel\"),
                 LibDir = filename:join(CWD, \"../lib\"),
                 Libs = [ {M,V,LibDir} || {M,V} <- L],
-                io:format(\"* set_unpacked~n\"),
-                {ok, \"{{ dep_version }}\"} = rpc:call(Target, release_handler, set_unpacked, [RelFile, Libs], 300000),
-                io:format(\"* check_install_release~n\"),
-                {ok, \"{{ parent_dep_version }}\", _} = rpc:call(Target, release_handler, check_install_release, [\"{{ dep_version }}\"], 300000),
-                io:format(\"* install_release~n\"),
-                {ok, \"{{ parent_dep_version }}\", _} = rpc:call(Target, release_handler, install_release, [\"{{ dep_version }}\"], 300000),
-                io:format(\"* make_permenant~n\"),
-                ok = rpc:call(Target, release_handler, make_permanent, [\"{{ dep_version }}\"], 300000),
+
+                {ok, \"{{ dep_version }}\"} = RelHandler(set_unpacked, [RelFile, Libs]),
+                case RelHandler(check_install_release, [\"{{ dep_version }}\"]) of
+                    {ok, \"{{ parent_dep_version }}\", _} ->
+                        % Current release version is the one we expect, so
+                        % install
+                        io:format(\"Upgrading live release from {{ parent_dep_version }} to {{ dep_version }}.~n\"),
+                        {ok, \"{{ parent_dep_version }}\", _} = RelHandler(install_release, [\"{{ dep_version }}\"]),
+                        ok = RelHandler(make_permanent, [\"{{ dep_version }}\"]);
+
+                    {ok, OtherVsn, _} when \"{{ dep_version }}\" > OtherVsn ->
+                        % This version is newer than the current version, and
+                        % the current version is not the one we expect, so
+                        % remove this release and bail
+                        ok = RelHandler(set_removed, [\"{{ dep_version }}\"]),
+                        io:format(\"Expected release {{ parent_dep_version }} to be installed, but found release ~p instead. Aborting install!~n\", [OtherVsn]),
+                        erlang:halt(1);
+
+                    {ok, OtherVsn, _} when OtherVsn > \"{{ dep_version }}\" ->
+                        % This version is older than the current version, nop
+                        io:format(\"Release {{ dep_version }} is older than the current release (~p), so will be unpacked but not installed.~n\", [OtherVsn]);
+
+                    {ok, OtherVsn, _} when OtherVsn == \"{{ dep_version }}\" ->
+                        % This version is the same as the current version, nop
+                        io:format(\"Release {{ dep_version }} is already installed.~n\");
+
+                    {error, {already_installed, _}} ->
+                        % This version is the same as the current version, nop
+                        io:format(\"Release {{ dep_version }} is already installed.~n\");
+
+                    Unhandled -> 
+                        io:format(\"Unhandled response for '{{ dep_version }}': ~p~n\", [Unhandled]),
+                        erlang:halt(1)
+                end,
+
                 init:stop()."
 
             else
                 echo "Node not running, rewriting RELEASES"
 
-                erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
-                NewRelFile = "{{ dep_version }}/RELEASES",
+                erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
+                NewRelFile = \"{{ dep_version }}/RELEASES\",
                 {ok, [NewRelease]} = file:consult(NewRelFile),
-                RelFile = "/opt/{{ app }}/releases/RELEASES",
+                RelFile = \"/opt/{{ app }}/releases/RELEASES\",
                 {ok, [Releases]} = file:consult(RelFile),
-                OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, S} <- Releases, V /= "{{dep_version}}"],
-                ok = file:write_file(RelFile, io_lib:format("~p.~n", [NewRelease ++ OldReleases])),
-                init:stop().'
+                [{_,_,CurrentVer,_,_,_}] = lists:filter(fun({_,_,_,_,_,permanent}) -> true; (_) -> false end, Releases),
+                NewReleases = case CurrentVer of 
+                    \"{{ parent_dep_version }}\" ->
+                        % Everything is as it should be
+                        io:format(\"Upgrading release offline from {{ parent_dep_version }} to {{ dep_version }}.~n\"),
+                        OldReleases = [ {release, N, V, E, D, old} || {release, N, V, E, D, _} <- Releases, V /= \"{{dep_version}}\"],
+                        [NewRelease ++ OldReleases];
+
+                    _ when \"{{ dep_version }}\" > CurrentVer ->
+                        % This version is newer than the current version, and
+                        % the current version is not the one we expect, so bail
+                        io:format(\"Expected release {{ parent_dep_version }} to be installed, but found release ~p instead. Aborting install!~n\", [CurrentVer]),
+                        erlang:halt(1);
+
+                    _ when CurrentVer > \"{{ dep_version }}\" ->
+                        % This version is older than the current version, so
+                        % install it as old
+                        io:format(\"Release {{ dep_version }} is older than the current release (~p), so will be unpacked as an old release.~n\", [CurrentVer]),
+                        [{release, ON, OV, OE, OD, _}] = NewRelease,
+                        [[{release, ON, OV, OE, OD, old}] ++ Releases];
+
+                    _ when CurrentVer == \"{{ dep_version }}\" ->
+                        % This version is the same as the current version, nop
+                        io:format(\"Release {{ dep_version }} is already installed.~n\"),
+                        Releases
+                end,
+
+                ok = file:write_file(RelFile, io_lib:format(\"~p.~n\", NewReleases)),
+                init:stop()."
             fi
         fi
 
