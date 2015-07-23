@@ -106,7 +106,7 @@ case $1 in
                     _ when CurrentVer == \"{{ dep_version }}\" ->
                         % This version is the same as the current version, nop
                         io:format(\"Release {{ dep_version }} is already installed.~n\"),
-                        Releases
+                        [Releases]
                 end,
 
                 ok = file:write_file(RelFile, io_lib:format(\"~p.~n\", NewReleases)),

@@ -4,37 +4,45 @@ import apt
 
 pkg_name = "{{ app }}"
 
-cache = apt.cache.Cache(apt.progress.text.OpProgress())
-if pkg_name not in cache:
-    print pkg_name + " is not available in the apt repositories configured on this machine"
-    sys.exit(1)
+RED = '\033[91m'
+GREEN = '\033[92m'
+YELLOW = '\033[93m'
+BOLD = '\033[1m'
+ENDC = '\033[0m'
 
-pkg = cache[pkg_name]
-install_versions = []
-
-if pkg.is_installed:
-    print pkg_name + " already installed, upgrading"
-
-    install = False
-    for version in reversed(pkg.versions):
-        if not install:
-            if version == pkg.installed:
-                install = True
-            continue
-
-        install_versions.append(version)
-else:
-    print pkg_name + " not installed, installing"
-    install_versions.append(pkg.candidate)
+class AptPkg():
+    def __init__(self, package):
+        self.cache = apt.cache.Cache(apt.progress.base.OpProgress())
+        self.package = package
+    def __enter__(self):
+        return self.cache[self.package]
+    def __exit__(self, _type, _value, _tb):
+        try:
+            self.cache.commit()
+            self.cache.close()
+        except Exception, arg:
+            print (BOLD+RED+"Package installation failed [{err}]"+ENDC).format(err=str(arg))
+            sys.exit(1)
 
 
-for version in install_versions:
-    print "Installing version " + str(version) + " of " + pkg_name
-    pkg.candidate = version
+if __name__ == "__main__":
 
-    pkg.mark_install()
-    try:
-        cache.commit()
-    except Exception, arg:
-        print "Package installation failed [{err}]".format(err=str(arg))
-        sys.exit(1)
+    upgrade_versions = []
+    with AptPkg(pkg_name) as pkg:
+        if pkg.installed:
+            index = pkg.versions.index(pkg.installed)
+            if index > 0:
+                upgrade_versions = [str(v.version) for v in reversed(pkg.versions[0:index])]
+                print (GREEN+"Upgrading %s from version %s through versions %s"+ENDC) % (pkg_name, pkg.installed.version, ', '.join(upgrade_versions))
+            elif index == 0:
+                print (GREEN+"%s is already at the latest available version (%s)"+ENDC) % (pkg_name, pkg.installed.version)
+        else:
+            upgrade_versions = [pkg.versions[0].version]
+            print (GREEN+"%s is not installed, installing latest version (%s)"+ENDC) % (pkg_name, upgrade_versions[0])
+
+    for version in upgrade_versions:
+        with AptPkg(pkg_name) as pkg:
+            print (BOLD+YELLOW+"Installing version %s"+ENDC) % version
+            install_version = pkg.versions.get(version)
+            pkg.candidate = install_version
+            pkg.mark_install()

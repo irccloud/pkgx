@@ -302,10 +302,12 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         {parent_package, AppName ++ Suffix},
         {parent_version, OldVersion},
         {extra_templates, [
-            {AppName, proxy_bin_command_dtl, 8#755}
+            {AppName, proxy_bin_command_dtl, 8#755},
+            {AppName ++ "_noauto", pinfile_dtl}
         ] ++ ExtraTemplates},
         {override_files, [
-            {AppName, InstallPrefix ++ "/../bin"} % relocate main app command
+            {AppName, InstallPrefix ++ "/../bin"}, % relocate main app command
+            {AppName ++ "_noauto", "/etc/apt/preferences.d"} % install pin
         ] ++ ExtraInstallFiles}
     ],
 

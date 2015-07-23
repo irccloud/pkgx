@@ -9,8 +9,6 @@ SCRIPT_DIR="$(dirname "$0")"
 RELEASE_ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 REL_DIR="$RELEASE_ROOT_DIR/releases/$REL_VSN"
-ERL_OPTS=""
-PIPE_DIR="/tmp/erl_pipes/${REL_NAME}/"
 RUNNER_LOG_DIR="${RUNNER_LOG_DIR:-$RELEASE_ROOT_DIR/log}"
 
 find_erts_dir() {
@@ -50,12 +48,6 @@ relx_nodetool() {
                                  -setcookie "$COOKIE" "$command"
 }
 
-# Output a start command for the last argument of run_erl
-relx_start_command() {
-    printf "exec \"%s\" \"%s\"" "$RELEASE_ROOT_DIR/bin/$REL_NAME" \
-           "$START_OPTION"
-}
-
 # Use $CWD/vm.args if exists, otherwise releases/VSN/vm.args
 if [ -z "$VMARGS_PATH" ]; then
     if [ -f "$RELEASE_ROOT_DIR/vm.args" ]; then
@@ -67,8 +59,8 @@ if [ -z "$VMARGS_PATH" ]; then
     fi
 fi
 
-if [ $RELX_REPLACE_OS_VARS ]; then
-    awk '{while(match($0,"[$]{[^}]*}")) {var=substr($0,RSTART+2,RLENGTH -3);gsub("[$]{"var"}",ENVIRON[var])}}1' < $VMARGS_PATH > $VMARGS_PATH.2.config
+if [ "$RELX_REPLACE_OS_VARS" ]; then
+    awk '{while(match($0,"[$]{[^}]*}")) {var=substr($0,RSTART+2,RLENGTH -3);gsub("[$]{"var"}",ENVIRON[var])}}1' < "${VMARGS_PATH}" > "${VMARGS_PATH}.2.config"
     VMARGS_PATH=$VMARGS_PATH.2.config
 fi
 
@@ -83,9 +75,9 @@ if [ -z "$CONFIG_PATH" ]; then
     fi
 fi
 
-if [ $RELX_REPLACE_OS_VARS ]; then
-    awk '{while(match($0,"[$]{[^}]*}")) {var=substr($0,RSTART+2,RLENGTH -3);gsub("[$]{"var"}",ENVIRON[var])}}1' < $CONFIG_PATH > $CONFIG_PATH.2.config
-    CONFIG_PATH=$CONFIG_PATH.2.config
+if [ "$RELX_REPLACE_OS_VARS" ]; then
+    awk '{while(match($0,"[$]{[^}]*}")) {var=substr($0,RSTART+2,RLENGTH -3);gsub("[$]{"var"}",ENVIRON[var])}}1' < "${CONFIG_PATH}" > "${CONFIG_PATH}.2.config"
+    CONFIG_PATH="${CONFIG_PATH}.2.config"
 fi
 
 # Extract the target node name from node.args
@@ -108,7 +100,7 @@ case $NAME in
         ;;
     *)
         # Add @hostname
-        NAME=$NAME@`hostname`
+        NAME=$NAME@$(hostname)
         ;;
 esac
 
@@ -141,89 +133,6 @@ case "$1" in
         exec "python" "$REL_DIR/${REL_NAME}_upgrade"
         ;;
 
-    start|start_boot)
-
-        # Make sure there is not already a node running
-        #RES=`$NODETOOL ping`
-        #if [ "$RES" = "pong" ]; then
-        #    echo "Node is already running!"
-        #    exit 1
-        #fi
-        case "$1" in
-            start)
-                shift
-                START_OPTION="console"
-                HEART_OPTION="start"
-                ;;
-            start_boot)
-                shift
-                START_OPTION="console_boot"
-                HEART_OPTION="start_boot"
-                ;;
-        esac
-        RUN_PARAM="$@"
-
-        # Set arguments for the heart command
-        set -- "$SCRIPT_DIR/$REL_NAME" "$HEART_OPTION"
-        [ "$RUN_PARAM" ] && set -- "$@" "$RUN_PARAM"
-
-        # Export the HEART_COMMAND
-        HEART_COMMAND="$@"
-        export HEART_COMMAND
-
-        mkdir -p "$PIPE_DIR"
-
-        "$BINDIR/run_erl" -daemon "$PIPE_DIR" "$RUNNER_LOG_DIR" \
-                          "$(relx_start_command)"
-        ;;
-
-    stop)
-        # Wait for the node to completely stop...
-        case $(uname -s) in
-            Linux|Darwin|FreeBSD|DragonFly|NetBSD|OpenBSD)
-                # PID COMMAND
-                PID=$(ps ax -o pid= -o command=|
-                      grep "$SCRIPT_DIR/.*/[b]eam"|awk '{print $1}')
-                ;;
-            SunOS)
-                # PID COMMAND
-                PID=$(ps -ef -o pid= -o args=|
-                      grep "$SCRIPT_DIR/.*/[b]eam"|awk '{print $1}')
-                ;;
-            CYGWIN*)
-                # UID PID PPID TTY STIME COMMAND
-                PID=$(ps -efw|grep "$SCRIPT_DIR/.*/[b]eam"|awk '{print $2}')
-                ;;
-        esac
-        relx_nodetool "stop"
-        ES="$?"
-        if [ "$ES" -ne 0 ]; then
-            exit "$ES"
-        fi
-        while $(kill -0 "$PID" 2>/dev/null);
-        do
-            sleep 1
-        done
-        ;;
-
-    restart)
-        ## Restart the VM without exiting the process
-        relx_nodetool "restart"
-        ES="$?"
-        if [ "$ES" -ne 0 ]; then
-            exit $ES
-        fi
-        ;;
-
-    reboot)
-        ## Restart the VM completely (uses heart to restart it)
-        relx_nodetool "reboot"
-        ES="$?"
-        if [ "$ES" -ne 0 ]; then
-            exit $ES
-        fi
-        ;;
-
     ping)
         ## See if the VM is alive
         relx_nodetool "ping"
@@ -233,22 +142,9 @@ case "$1" in
         fi
         ;;
 
-    attach)
-        # Make sure a node IS running
-        RES="$(relx_nodetool "ping")"
-        ES="$?"
-        if [ "$ES" -ne 0 ]; then
-            echo "Node is not running!"
-            exit $ES
-        fi
-
-        shift
-        exec "$BINDIR/to_erl" "$PIPE_DIR"
-        ;;
-
     remote_console)
         # Make sure a node IS running
-        RES="$(relx_nodetool "ping")"
+        relx_nodetool "ping"
         ES="$?"
         if [ "$ES" -ne 0 ]; then
             echo "Node is not running!"
@@ -257,26 +153,6 @@ case "$1" in
 
         shift
         relx_rem_sh
-        ;;
-
-    upgrade|downgrade|install)
-        if [ -z "$2" ]; then
-            echo "Missing package argument"
-            echo "Usage: $REL_NAME $1 {package base name}"
-            echo "NOTE {package base name} MUST NOT include the .tar.gz suffix"
-            exit 1
-        fi
-
-        # Make sure a node IS running
-        RES="$(relx_nodetool "ping")"
-        ES="$?"
-        if [ "$ES" -ne 0 ]; then
-            echo "Node is not running!"
-            exit $ES
-        fi
-
-        exec "$BINDIR/escript" "$ROOTDIR/bin/install_upgrade.escript" \
-             "$REL_NAME" "$NAME" "$COOKIE" "$2"
         ;;
 
     console|console_clean|console_boot)
@@ -328,12 +204,10 @@ case "$1" in
         exec "$@" -- "${1+$ARGS}"
         ;;
 
-    foreground)
+    foreground|start)
         # start up the release in the foreground for use by runit
         # or other supervision services
-
         [ -f "$REL_DIR/$REL_NAME.boot" ] && BOOTFILE="$REL_NAME" || BOOTFILE=start
-        FOREGROUNDOPTIONS="-noshell -noinput +Bd"
 
         # Setup beam-required vars
         EMU=beam
@@ -347,7 +221,7 @@ case "$1" in
 
         # Build an array of arguments to pass to exec later on
         # Build it here because this command will be used for logging.
-        set -- "$BINDIR/erlexec" $FOREGROUNDOPTIONS \
+        set -- "$BINDIR/erlexec" -noshell -noinput +Bd \
             -boot "$REL_DIR/$BOOTFILE" -mode embedded -config "$CONFIG_PATH" \
             -args_file "$VMARGS_PATH"
 
@@ -359,7 +233,7 @@ case "$1" in
         exec "$@" -- "${1+$ARGS}"
         ;;
     *)
-        echo "Usage: $REL_NAME {start|start_boot <file>|foreground|stop|restart|reboot|ping|console|console_clean|console_boot <file>|attach|remote_console|upgrade|vm_info|upgrade_debian}"
+        echo "Usage: $REL_NAME {start|foreground|ping|console|console_clean|console_boot <file>|remote_console|vm_info|deb_upgrade}"
         exit 1
         ;;
 esac
