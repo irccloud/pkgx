@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import os
 import sys
 import apt
 
@@ -26,6 +27,10 @@ class AptPkg():
 
 
 if __name__ == "__main__":
+
+    if os.geteuid() != 0:
+        print (BOLD+RED+"This command must be run as root"+ENDC)
+        sys.exit(1)
 
     upgrade_versions = []
     with AptPkg(pkg_name) as pkg:
