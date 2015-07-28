@@ -30,7 +30,7 @@ case $1 in
 
                 erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
                 Target = list_to_atom(\"$NODE_NAME\"),
-                RelHandler = fun(F, A) -> rpc:call(Target, release_handler, F, A, 30000) end,
+                RelHandler = fun(F, A) -> rpc:call(Target, release_handler, F, A, 300000) end,
                 {ok, [{_,_,_,L}]} = file:consult(\"{{ dep_version }}/{{ app }}.rel\"),
                 {ok, CWD} = file:get_cwd(),
                 RelFile = filename:join(CWD, \"{{ dep_version }}/{{ app }}.rel\"),
