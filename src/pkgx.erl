@@ -144,7 +144,7 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
             []
     end,
 
-    DepList     = compile_dep_list(AppName, Suffix, SubDeps, []) ++ [AppName] ++ ExtDependencies,
+    DepList     = compile_dep_list(AppName, Suffix, SubDeps, []) ++ [AppName ++ Suffix] ++ ExtDependencies,
     DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
@@ -231,7 +231,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
             undefined
     end,
 
-    DepList     = compile_dep_list(AppName, Suffix, Deps, []) ++ [AppName, "python", "python-apt"],
+    DepList     = compile_dep_list(AppName, Suffix, Deps, []) ++ [AppName ++ Suffix, "python", "python-apt"],
     DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
