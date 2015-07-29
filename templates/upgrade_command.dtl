@@ -11,6 +11,9 @@ YELLOW = '\033[93m'
 BOLD = '\033[1m'
 ENDC = '\033[0m'
 
+# Prevents annoying debconf warnings
+os.environ["DEBIAN_FRONTEND"] = "noninteractive"
+
 class AptPkg():
     def __init__(self, package):
         self.cache = apt.cache.Cache(apt.progress.base.OpProgress())
