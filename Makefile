@@ -12,6 +12,9 @@ script: compile
 compile: $(REBAR)
 	$(REBAR) get-deps compile
 
+install: compile
+	sudo cp pkgx /usr/local/bin/pkgx
+
 clean: $(REBAR)
 	$(REBAR) clean
 	rm -f pkgx
