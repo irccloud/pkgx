@@ -7,8 +7,7 @@
                   kernel,
                   stdlib,
                   erlydtl,
-                  getopt,
-                  erlware_commons
+                  getopt
                  ]},
   {mod, { pkgx_app, []}},
   {env, []}
