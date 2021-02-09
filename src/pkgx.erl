@@ -37,6 +37,11 @@ makepackages(Options) ->
     ok = application:load(erlydtl),
     ok = application:load(pkgx),
 
+    erlydtl:compile_dir("templates", pkgx_tpls, [
+        {out_dir, false},
+        return
+    ]),
+
     RelPath = proplists:get_value(relpath, Options, undefined),
     ReleasesFile = "/releases/RELEASES",
 
@@ -115,12 +120,12 @@ make_dep_packages(BaseVars, AppName, [Dep|Deps], SubDeps, ParentDeps, InstallPre
     ExtraTemplates = case DepVersion /= ParentVersion andalso ParentVersion /= "" of
         true ->
             [
-                {"debian/preinst", deb_debian_preinst_dtl},
-                {"debian/postinst", deb_debian_postinst_dtl}
+                {"debian/preinst", deb_debian_preinst},
+                {"debian/postinst", deb_debian_postinst}
             ];
         false ->
             [
-                {"debian/postinst", deb_debian_postinst_dtl}
+                {"debian/postinst", deb_debian_postinst}
             ]
     end,
 
@@ -219,7 +224,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
 
     ExtraTemplates = case OldVersion /= undefined of
         true ->
-            [{"debian/preinst", deb_debian_preinst_dtl}];
+            [{"debian/preinst", deb_debian_preinst}];
         false ->
             []
     end,
@@ -249,10 +254,10 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
         {package_depends, DepString},
         {package_shortdesc, "Release directory for " ++ AppName ++ " version " ++ Version}, 
         {extra_templates, [
-            {"debian/postinst", deb_debian_meta_upgrade_postinst_dtl},
-            {"debian/prerm", deb_debian_meta_prerm_dtl},
-            {AppName, bin_command_dtl, 8#755},
-            {AppName ++ "_upgrade", upgrade_command_dtl, 8#755}
+            {"debian/postinst", deb_debian_meta_upgrade_postinst},
+            {"debian/prerm", deb_debian_meta_prerm},
+            {AppName, bin_command, 8#755},
+            {AppName ++ "_upgrade", upgrade_command, 8#755}
         ] ++ ExtraTemplates}
     ],
 
@@ -267,7 +272,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
 
     ExtraTemplates = case OldVersion /= undefined of
         true ->
-            [{"debian/preinst", deb_debian_preinst_dtl}];
+            [{"debian/preinst", deb_debian_preinst}];
         false ->
             []
     end,
@@ -302,8 +307,8 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         {parent_package, AppName ++ Suffix},
         {parent_version, OldVersion},
         {extra_templates, [
-            {AppName, proxy_bin_command_dtl, 8#755},
-            {AppName ++ "_noauto", pinfile_dtl}
+            {AppName, proxy_bin_command, 8#755},
+            {AppName ++ "_noauto", pinfile}
         ] ++ ExtraTemplates},
         {override_files, [
             {AppName, InstallPrefix ++ "/../bin"}, % relocate main app command
