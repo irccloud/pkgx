@@ -58,11 +58,11 @@ make_package(Vars, Target) ->
     PkgName = proplists:get_value(package_name, PkgVars),
     Templates =
         [
-         {"debian/changelog", deb_debian_changelog},
+         {"debian/changelog", deb_debian_changelog_dtl},
          {"debian/compat", <<"7">>},
-         {"debian/control", deb_debian_control},
-         {"debian/rules", deb_debian_rules},
-         {"debian/" ++ PkgName ++ ".install", deb_debian_install}
+         {"debian/control", deb_debian_control_dtl},
+         {"debian/rules", deb_debian_rules_dtl},
+         {"debian/" ++ PkgName ++ ".install", deb_debian_install_dtl}
         ],
     process_templates(Templates, Basedir, PkgVars),
 
@@ -102,7 +102,7 @@ movefiles([], _To) ->
     ok.
 
 process_file_entry(File, Module, Vars) when is_atom(Module) ->
-    {ok, Output} = pkgx_tpls:render(Module, Vars),
+    {ok, Output} = Module:render(Vars),
     process_file_entry(File, iolist_to_binary(Output), Vars);
 process_file_entry(File, Output, _Vars) when is_binary(Output) ->
     ok = file:write_file(File, Output).
