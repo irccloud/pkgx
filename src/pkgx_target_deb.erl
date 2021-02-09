@@ -19,7 +19,7 @@ make_package(Vars, Target) ->
     Basedir = proplists:get_value(basedir, Vars),
 
     % Always start with a fresh debian dir
-    ok = file:del_dir_r(Basedir ++ "/debian"),
+    file:del_dir_r(Basedir ++ "/debian"),
 
     InstallPrefix = proplists:get_value(install_prefix, Vars),
     InstallDir = proplists:get_value(install_dir_name, Vars),
