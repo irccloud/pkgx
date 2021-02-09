@@ -206,14 +206,6 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
     Suffix = proplists:get_value(suffix, BaseVars),
 
-    {ok, _} = file:copy(
-        RelPath ++ "/bin/start_clean.boot",
-        RelPath ++ "/releases/" ++ Version ++ "/start_clean.boot"),
-
-    {ok, _} = file:copy(
-        RelPath ++ "/releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
-        RelPath ++ "/releases/" ++ Version ++ "/start.boot"),
-
     file:copy(RelPath ++ "/releases/RELEASES", RelPath ++ "/releases/" ++ Version ++ "/RELEASES"),
     file:copy(RelPath ++ "/releases/start_erl.data", RelPath ++ "/releases/" ++ Version ++ "/start_erl.data"),
 
