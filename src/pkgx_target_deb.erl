@@ -94,7 +94,8 @@ process_templates(Templates, Basedir, Vars) ->
 
 movefiles([FilePath|Files], To) ->
     FileName = lists:last(filename:split(FilePath)),
-    ec_file:move(FilePath, To ++ FileName),
+    ec_file:copy(FilePath, To ++ FileName),
+    ec_file:remove(FilePath),
     movefiles(Files, To);
 movefiles([], _To) ->
     ok.
