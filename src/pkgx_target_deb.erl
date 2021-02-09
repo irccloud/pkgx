@@ -59,6 +59,7 @@ make_package(Vars, Target) ->
     Templates =
         [
          {"debian/changelog", deb_debian_changelog_dtl},
+         {"debian/compat", <<"7">>},
          {"debian/control", deb_debian_control_dtl},
          {"debian/rules", deb_debian_rules_dtl},
          {"debian/" ++ PkgName ++ ".install", deb_debian_install_dtl}
