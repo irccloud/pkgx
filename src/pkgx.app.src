@@ -6,7 +6,9 @@
   {applications, [
                   kernel,
                   stdlib,
-                  erlydtl
+                  erlydtl,
+                  getopt,
+                  erlware_commons
                  ]},
   {mod, { pkgx_app, []}},
   {env, []}
