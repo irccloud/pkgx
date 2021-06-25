@@ -206,9 +206,18 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
     Suffix = proplists:get_value(suffix, BaseVars),
 
-    {ok, _} = file:copy(
-        RelPath ++ "/releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
-        RelPath ++ "/releases/" ++ Version ++ "/start.boot"),
+    AppBoot = RelPath ++ "/releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
+    StartBoot = RelPath ++ "/releases/" ++ Version ++ "/start.boot",
+    case {filelib:is_regular(AppBoot), filelib:is_regular(StartBoot)} of
+        {true, false} ->
+            % Older versions of rebar3 don't create the start.boot file
+            % but do create AppName.boot
+            {ok, _} = file:copy(AppBoot, StartBoot);
+        {false, true} ->
+            % Newer versions of rebar3 don't create the AppName.boot file
+            % but do create start.boot
+            {ok, _} = file:copy(StartBoot, AppBoot)
+    end,
 
     file:copy(RelPath ++ "/releases/RELEASES", RelPath ++ "/releases/" ++ Version ++ "/RELEASES"),
     file:copy(RelPath ++ "/releases/start_erl.data", RelPath ++ "/releases/" ++ Version ++ "/start_erl.data"),
