@@ -218,7 +218,9 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
         {false, true} ->
             % Newer versions of rebar3 don't create the AppName.boot file
             % but do create start.boot
-            {ok, _} = file:copy(StartBoot, AppBoot)
+            {ok, _} = file:copy(StartBoot, AppBoot);
+        _ ->
+            ok
     end,
 
     file:copy(
