@@ -206,8 +206,10 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
     Suffix = proplists:get_value(suffix, BaseVars),
 
-    AppBoot = RelPath ++ "/releases/" ++ Version ++ "/" ++ AppName ++ ".boot",
-    StartBoot = RelPath ++ "/releases/" ++ Version ++ "/start.boot",
+    RelVsnPath = RelPath ++ "/releases/" ++ Version,
+
+    AppBoot = RelVsnPath ++ "/" ++ AppName ++ ".boot",
+    StartBoot = RelVsnPath ++ "/start.boot",
     case {filelib:is_regular(AppBoot), filelib:is_regular(StartBoot)} of
         {true, false} ->
             % Older versions of rebar3 don't create the start.boot file
@@ -219,8 +221,18 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
             {ok, _} = file:copy(StartBoot, AppBoot)
     end,
 
-    file:copy(RelPath ++ "/releases/RELEASES", RelPath ++ "/releases/" ++ Version ++ "/RELEASES"),
-    file:copy(RelPath ++ "/releases/start_erl.data", RelPath ++ "/releases/" ++ Version ++ "/start_erl.data"),
+    file:copy(
+        RelPath ++ "/releases/RELEASES",
+        RelVsnPath ++ "/RELEASES"
+    ),
+    file:copy(
+        RelPath ++ "/releases/start_erl.data",
+        RelVsnPath ++ "/start_erl.data"
+    ),
+    file:copy(
+        RelPath ++ "/bin/" ++ AppName,
+        RelVsnPath ++ "/" ++ AppName
+    ),
 
     ExtraTemplates = case OldVersion /= undefined of
         true ->
@@ -240,7 +252,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
     DepString   = string:join(DepList, ", "),
 
     Vars = BaseVars ++ [
-        {basedir, RelPath ++ "/releases/" ++ Version},
+        {basedir, RelVsnPath},
         {install_prefix, InstallPrefix}, 
         {install_dir_name, Version}, 
         {app, AppName}, 
@@ -256,7 +268,6 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
         {extra_templates, [
             {"debian/postinst", deb_debian_meta_upgrade_postinst_dtl},
             {"debian/prerm", deb_debian_meta_prerm_dtl},
-            {AppName, bin_command_dtl, 8#755},
             {AppName ++ "_upgrade", upgrade_command_dtl, 8#755}
         ] ++ ExtraTemplates}
     ],
@@ -311,7 +322,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
             {AppName ++ "_noauto", pinfile_dtl}
         ] ++ ExtraTemplates},
         {override_files, [
-            {AppName, InstallPrefix ++ "/../bin"}, % relocate main app command
+            {AppName, InstallLocation ++ "/bin"}, % relocate main app command
             {AppName ++ "_noauto", "/etc/apt/preferences.d"} % install pin
         ] ++ ExtraInstallFiles}
     ],

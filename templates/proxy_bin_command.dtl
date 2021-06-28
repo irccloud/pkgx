@@ -18,4 +18,9 @@ init:stop().')
 echo "Using $REL_NAME release $REL_VSN.."
 
 REL_DIR="$RELEASE_ROOT_DIR/releases/$REL_VSN"
-exec "$REL_DIR/$REL_NAME" "$@"
+if [ "$@" == "deb_upgrade" ]
+then
+    exec "python" "${REL_DIR}/${REL_NAME}_upgrade"
+else
+    exec "${REL_DIR}/${REL_NAME}" "$@"
+fi
