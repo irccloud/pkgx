@@ -24,7 +24,7 @@ node {
     withErlang(erlang_version) {
       shc("rebar3 escriptize")
     }
-  }
+  })
 }
 
 def withErlang(String version, block) {
