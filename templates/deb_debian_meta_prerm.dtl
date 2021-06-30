@@ -13,7 +13,7 @@ case $1 in
         then
             EPMD_PORT={{ epmdport }}
         fi
-        export ERL_DIST_PORT=EPMD_PORT
+        export ERL_DIST_PORT=$EPMD_PORT
 
         PING=$(./bin/{{ app }} ping || echo)
         if [ "$PING" == "pong" ]; then
