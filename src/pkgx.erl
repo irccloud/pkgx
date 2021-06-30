@@ -26,6 +26,7 @@ option_spec_list() ->
      {user,     $U,     "user",     {string, "root"},       "User that will be running the app"},
      {output,   $o,     "output",   {string, "./packages"}, "Directory where the packages will be output"},
      {relpath,  $p,     "relpath",  {string, "./_build/$ver/rel/$relname"}, "The path to the releases dir"},
+     {epmdport, undefined, "epmdport", string,              "Port to use in epmdless mode"},
      {relname,  $n,     "relname",  string,                 "The release name you gave relx"},
      {buildver, $b,     "buildver", string,                 "The version to build"},
      {upfrom,   $u,     "upfrom",   string,                 "The version to upgrade from"},
@@ -208,21 +209,6 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
 
     RelVsnPath = RelPath ++ "/releases/" ++ Version,
 
-    AppBoot = RelVsnPath ++ "/" ++ AppName ++ ".boot",
-    StartBoot = RelVsnPath ++ "/start.boot",
-    case {filelib:is_regular(AppBoot), filelib:is_regular(StartBoot)} of
-        {true, false} ->
-            % Older versions of rebar3 don't create the start.boot file
-            % but do create AppName.boot
-            {ok, _} = file:copy(AppBoot, StartBoot);
-        {false, true} ->
-            % Newer versions of rebar3 don't create the AppName.boot file
-            % but do create start.boot
-            {ok, _} = file:copy(StartBoot, AppBoot);
-        _ ->
-            ok
-    end,
-
     file:copy(
         RelPath ++ "/releases/RELEASES",
         RelVsnPath ++ "/RELEASES"
@@ -230,10 +216,6 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
     file:copy(
         RelPath ++ "/releases/start_erl.data",
         RelVsnPath ++ "/start_erl.data"
-    ),
-    file:copy(
-        RelPath ++ "/bin/" ++ AppName,
-        RelVsnPath ++ "/" ++ AppName
     ),
 
     ExtraTemplates = case OldVersion /= undefined of
@@ -269,8 +251,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
         {package_shortdesc, "Release directory for " ++ AppName ++ " version " ++ Version}, 
         {extra_templates, [
             {"debian/postinst", deb_debian_meta_upgrade_postinst_dtl},
-            {"debian/prerm", deb_debian_meta_prerm_dtl},
-            {AppName ++ "_upgrade", upgrade_command_dtl, 8#755}
+            {"debian/prerm", deb_debian_meta_prerm_dtl}
         ] ++ ExtraTemplates}
     ],
 
@@ -278,7 +259,6 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
 
 
 make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, InstallLocation, OutputPath, ExtraInstallFiles) ->
-    InstallPrefix = InstallLocation ++  "/releases",
     Suffix = proplists:get_value(suffix, BaseVars),
 
     io:format("Oldversion: ~p~n", [OldVersion]),
@@ -307,7 +287,7 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
     RelPath = proplists:get_value(relpath, BaseVars, undefined),
 
     Vars = BaseVars ++ [
-        {install_prefix, InstallPrefix}, 
+        {install_prefix, InstallLocation}, 
         {install_dir_name, Version}, 
         {app_path, InstallLocation},
         {app, AppName}, 
@@ -320,11 +300,12 @@ make_meta_package(BaseVars, AppName, Version, OldVersion, _Deps, _ParentDeps, In
         {parent_package, AppName ++ Suffix},
         {parent_version, OldVersion},
         {extra_templates, [
-            {AppName, proxy_bin_command_dtl, 8#755},
+            {AppName ++ "_upgrade", upgrade_command_dtl, 8#755},
             {AppName ++ "_noauto", pinfile_dtl}
-        ] ++ ExtraTemplates},
-        {override_files, [
-            {AppName, InstallLocation ++ "/bin"}, % relocate main app command
+        ] ++ ExtraTemplates}, 
+        {override_files, [ 
+            {"bin/" ++ AppName, InstallLocation ++ "/bin"}, % make sure extended start script is installed
+            {AppName ++ "_upgrade", InstallLocation ++ "/bin"}, % relocate upgrade app command
             {AppName ++ "_noauto", "/etc/apt/preferences.d"} % install pin
         ] ++ ExtraInstallFiles}
     ],

@@ -17,24 +17,24 @@ case $1 in
             chown -R "{{user}}" "/var/log/{{app}}"
         fi
 
-        if [ ! -h "../log" ]; then
+        if [ ! -h "log" ]; then
             echo "Linking log directory"
-            ln -s "/var/log/{{app}}" "../log"
+            ln -s "/var/log/{{app}}" "log"
         fi
 
-        if [ -f RELEASES ]; then
-            PING=$({{ dep_version }}/{{ app }} ping || echo)
+        if [ -f "releases/RELEASES" ]; then
+            PING=$(ERL_DIST_PORT={{ epmdport }} ./bin/{{ app }} ping || echo)
             if [ "$PING" == "pong" ]; then
                 echo "Node running, performing runtime upgrade"
-                read NODE_NAME NODE_COOKIE <<<$(./{{ dep_version }}/{{ app }} vm_info)
-
-                erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
+                read NODE_NAME <<<$(./bin/{{ app }} rpc erlang node)
+                read NODE_COOKIE <<<$(./bin/{{ app }} rpc erlang get_cookie)
+                erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -hidden -dist_listen false -erl_epmd_port {{ epmdport }} -start_epmd false -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
                 Target = list_to_atom(\"$NODE_NAME\"),
                 RelHandler = fun(F, A) -> rpc:call(Target, release_handler, F, A, 300000) end,
-                {ok, [{_,_,_,L}]} = file:consult(\"{{ dep_version }}/{{ app }}.rel\"),
+                {ok, [{_,_,_,L}]} = file:consult(\"releases/{{ dep_version }}/{{ app }}.rel\"),
                 {ok, CWD} = file:get_cwd(),
-                RelFile = filename:join(CWD, \"{{ dep_version }}/{{ app }}.rel\"),
-                LibDir = filename:join(CWD, \"../lib\"),
+                RelFile = filename:join(CWD, \"releases/{{ dep_version }}/{{ app }}.rel\"),
+                LibDir = filename:join(CWD, \"lib\"),
                 Libs = [ {M,V,LibDir} || {M,V} <- L],
 
                 {ok, \"{{ dep_version }}\"} = RelHandler(set_unpacked, [RelFile, Libs]),
@@ -77,10 +77,10 @@ case $1 in
             else
                 echo "Node not running, rewriting RELEASES"
 
-                erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
-                NewRelFile = \"{{ dep_version }}/RELEASES\",
+                erl -hidden -dist_listen false -start_epmd false -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
+                NewRelFile = \"releases/{{ dep_version }}/RELEASES\",
                 {ok, [NewRelease]} = file:consult(NewRelFile),
-                RelFile = \"/opt/{{ app }}/releases/RELEASES\",
+                RelFile = \"releases/RELEASES\",
                 {ok, [Releases]} = file:consult(RelFile),
                 [{_,_,CurrentVer,_,_,_}] = lists:filter(fun({_,_,_,_,_,permanent}) -> true; (_) -> false end, Releases),
                 NewReleases = case CurrentVer of 
@@ -114,16 +114,16 @@ case $1 in
             fi
         fi
 
-        if [ ! -f "RELEASES" ]; then
+        if [ ! -f "releases/RELEASES" ]; then
             echo "RELEASES missing, copying from release"
-            cp "{{ dep_version }}/RELEASES" "RELEASES"
-            chmod 777 "RELEASES"
+            cp "releases/{{ dep_version }}/RELEASES" "releases/RELEASES"
+            chmod 777 "releases/RELEASES"
         fi
 
-        if [ ! -f "start_erl.data" ]; then
+        if [ ! -f "releases/start_erl.data" ]; then
             echo "start_erl.data missing, copying from release"
-            cp "{{ dep_version }}/start_erl.data" "start_erl.data"
-            chmod 777 "start_erl.data"
+            cp "releases/{{ dep_version }}/start_erl.data" "releases/start_erl.data"
+            chmod 777 "releases/start_erl.data"
         fi
     ;;
 esac

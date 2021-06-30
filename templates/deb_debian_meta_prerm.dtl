@@ -4,15 +4,15 @@ set -e
 case $1 in
     remove)
         # Switch to the release directory as the /bin dir is likely missing now
-        cd "{{ install_prefix }}/{{ dep_version }}"
+        cd "{{ install_prefix }}"
         export ERL_CRASH_DUMP="/dev/null"
 
-        PING=$(./{{ app }} ping || echo)
+        PING=$(ERL_DIST_PORT={{ epmdport }} ./bin/{{ app }} ping || echo)
         if [ "$PING" == "pong" ]; then
             echo "Node running, performing runtime release removal"
-            read NODE_NAME NODE_COOKIE <<<$(./{{ app }} vm_info)
-
-            erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
+            read NODE_NAME <<<$(./bin/{{ app }} rpc erlang node)
+            read NODE_COOKIE <<<$(./bin/{{ app }} rpc erlang get_cookie)
+            erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -hidden -dist_listen false -erl_epmd_port {{ epmdport }} -start_epmd false -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
             Target = list_to_atom(\"$NODE_NAME\"),
             ok = case rpc:call(Target, release_handler, set_removed, [\"{{ dep_version }}\"], 300000) of
                 ok ->
@@ -25,10 +25,10 @@ case $1 in
         else
             echo "Node not running, rewriting RELEASES"
 
-            erl -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
-            RelFile = "/opt/{{ app }}/releases/RELEASES",
-            DataFile = "/opt/{{ app }}/releases/start_erl.data",
-            LogFile = "/opt/{{ app }}/log",
+            erl -hidden -dist_listen false -start_epmd false -name ctl-$$@127.0.0.1 -noshell -noinput -eval '
+            RelFile = "releases/RELEASES",
+            DataFile = "releases/start_erl.data",
+            LogFile = "log",
             {ok, [Releases]} = file:consult(RelFile),
             Filtered = lists:filter(fun({_,_,"{{ dep_version }}",_,_,_}) -> false; (_) -> true end, Releases),
             case length(Filtered) of

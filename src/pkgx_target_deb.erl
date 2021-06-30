@@ -27,29 +27,29 @@ make_package(Vars, Target) ->
     % Because these need to be scanned by the install files step
     ExtraTemplates = proplists:get_value(extra_templates, Vars, []),
     process_templates(ExtraTemplates, Basedir, Vars),
-
-    {ok, DirList} = file:list_dir(Basedir),
-    InstallList = [ X || X <- DirList, X /= "debian" ],
-    Install = lists:map(
-        fun(A) ->
-            To = InstallPrefix ++ "/" ++ InstallDir,
-            case filelib:is_file(Basedir ++ "/" ++ A) of
-                true ->
-                    {A, To};
-                false ->
-                    {A ++ "/", To}
-            end
-        end,
-        InstallList
-    ),
-
-    ExtraFiles = proplists:get_value(extra_files, Vars, []),
     
     OverrideFiles = proplists:get_value(override_files, Vars, []),
     InstallFiles = case length(OverrideFiles) > 0 of
         true ->
             OverrideFiles;
         false ->
+            {ok, DirList} = file:list_dir(Basedir),
+            InstallList = [ X || X <- DirList, X /= "debian" ],
+            Install = lists:map(
+                fun(A) ->
+                    To = InstallPrefix ++ "/" ++ InstallDir,
+                    case filelib:is_file(Basedir ++ "/" ++ A) of
+                        true ->
+                            {A, To};
+                        false ->
+                            {A ++ "/", To}
+                    end
+                end,
+                InstallList
+            ),
+
+            ExtraFiles = proplists:get_value(extra_files, Vars, []),
+            
             Install ++ ExtraFiles
     end,
 
