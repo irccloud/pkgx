@@ -4,7 +4,7 @@ export ERL_CRASH_DUMP="/dev/null"
 
 case $1 in
     configure)
-        cd "{{ install_prefix }}"
+        cd "{{ install_root }}"
 
         if ! id -u "{{user}}" &> /dev/null; then
             echo "Creating '{{user}}' user"
@@ -22,13 +22,21 @@ case $1 in
             ln -s "/var/log/{{app}}" "log"
         fi
 
+        # Transition until all nodes are epmdless
+        EPMD_PORT=$(epmd -names 2>/dev/null | grep irccloud | cut -d ' ' -f 5)
+        if [ "$EPMD_PORT" == "" ]
+        then
+            EPMD_PORT={{ epmdport }}
+        fi
+        export ERL_DIST_PORT=EPMD_PORT
+
         if [ -f "releases/RELEASES" ]; then
-            PING=$(ERL_DIST_PORT={{ epmdport }} ./bin/{{ app }} ping || echo)
+            PING=$(./bin/{{ app }} ping || echo)
             if [ "$PING" == "pong" ]; then
                 echo "Node running, performing runtime upgrade"
                 read NODE_NAME <<<$(./bin/{{ app }} rpc erlang node)
                 read NODE_COOKIE <<<$(./bin/{{ app }} rpc erlang get_cookie)
-                erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -hidden -dist_listen false -erl_epmd_port {{ epmdport }} -start_epmd false -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
+                erl -env ERL_MAX_PORTS 1024 -setcookie $NODE_COOKIE -hidden -dist_listen false -erl_epmd_port $EPMD_PORT -start_epmd false -name ctl-$$@127.0.0.1 -noshell -noinput -eval "
                 Target = list_to_atom(\"$NODE_NAME\"),
                 RelHandler = fun(F, A) -> rpc:call(Target, release_handler, F, A, 300000) end,
                 {ok, [{_,_,_,L}]} = file:consult(\"releases/{{ dep_version }}/{{ app }}.rel\"),

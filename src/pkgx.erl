@@ -237,6 +237,7 @@ make_release_package(BaseVars, AppName, Version, OldVersion, ErtsVsn, Deps, _Par
 
     Vars = BaseVars ++ [
         {basedir, RelVsnPath},
+        {install_root, InstallLocation},
         {install_prefix, InstallPrefix}, 
         {install_dir_name, Version}, 
         {app, AppName}, 
