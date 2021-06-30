@@ -49,11 +49,15 @@ make_package(Vars, Target) ->
             ),
 
             ExtraFiles = proplists:get_value(extra_files, Vars, []),
-            
+
             Install ++ ExtraFiles
     end,
 
-    PkgVars = [ {install, InstallFiles} | Vars ],
+    PkgVars = [
+        {install, InstallFiles},
+        {timestamp, calendar:now_to_datetime(os:timestamp())}
+        | Vars
+    ],
 
     PkgName = proplists:get_value(package_name, PkgVars),
     Templates =
